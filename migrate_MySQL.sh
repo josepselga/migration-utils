@@ -41,7 +41,7 @@ check_changes() {
 
 
 ####################
-#  LOCAL ON MASTER #
+#  LOCAL ON MASTER 
 ####################
 
 # Dump database
