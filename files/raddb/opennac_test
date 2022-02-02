@@ -1,0 +1,67 @@
+opennac {
+  # URL to call openNAC API
+  apiUrl = http://127.0.0.1/api
+
+  # API Key required when API call is not defined on localhost
+  apiKey =
+
+  # Timeout to abort api call (value in seconds)
+  apiTimeout = 10
+
+  # Memcached server address 
+  memcachedIp = localhost
+
+  # Memcached server port
+  memcachedPort = 11211
+
+  # Memcached default TTL
+  memcachedTTL = 60
+
+  # IP address is notified to openNAC using accounting information, 
+  # but this address can be received several times.
+  # This minimum notification period, defined in seconds, allow avoid send 
+  # the same information during the specified time.
+  ipMinNotificationPeriod = 1800
+
+  # If we don't accept any request without MAC address,
+  # we can reject the request.
+  # By default, request without MAC address are accepted and processed by openNAC.
+  rejectWithoutMac = no
+
+  # Default repository charset used.
+  # Mainly used by certificate fields.
+  repositoryCharset = cp1252
+
+  # Radius Hunt Group name used to define the VPN servers,
+  # to identify all user requests received from them.
+  # This information is defined in "/etc/raddb/huntgroups" file,
+  # with the following syntax:
+  #     vpn		NAS-IP-Address == 1.2.3.4 
+  vpnHuntgroupName = vpn
+  
+  # When OTP authentication is used by openNAC users, for example in VPN connections.
+  otpAuth = yes
+  
+  # Use LDAP auth instead of NTLM for OTP auths (otpAuth must be enabled).
+  useLdapInOtpAuth = no
+  
+  # When enabled (1), the access will be granted to users when OTP secret is not created,
+  # when it's disabled (0), if the user has no OTP secret the auth is rejected.
+  allowOtpNotFound = 1
+  
+  # Default result when any issue is produced in openNAC policy evaluation or 
+  # "apiTimeout" is reached.
+  # By default, request is accept and default vlan is assigned 
+  acceptWhenPolEvalDiscards = yes
+  
+  # Default message used to notify authentication error, 
+  # when radius module error message is not specified.
+  defaultAuthErrorMsg = "Error in radius authentication"
+  
+  # Enable module debug mode, printing additional debug information.
+  debug = no
+
+  # Switch to "yes" to disable sending accounting visibility events
+  acctVisibilityOff = no
+
+}
