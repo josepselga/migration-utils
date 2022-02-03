@@ -34,3 +34,6 @@ ssh root@$onprincipal 'systemctl restart redis; systemctl restart dhcp-helper-re
 
 # Apply updatedb.php 
 ssh root@$onprincipal 'php /usr/share/opennac/api/scripts/updatedb.php'
+
+# Change application.ini passwords
+

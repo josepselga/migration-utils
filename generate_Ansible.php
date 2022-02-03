@@ -14,16 +14,10 @@ $criticalAlertMailTitle = "openNAC policy message [%MSG%]";
 $criticalAlertMailContent = "";
 
 
+
+$clients = array();
+
 /*
-
-"clients_data"=> array(
-        array(
-            "sku"=> "BL394D",
-            "quantity"=> 4,
-            "description"=> "Basketball",
-            "price"=> 450,
-          ),
-
 clients_data: 
   - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
   - [ip: '10.10.36.0/24', shortname: 'internal1010', secret: 'testing123']
@@ -80,6 +74,25 @@ function getToken( $url, $user, $password){
     }
     curl_close($curl);
     return $token;
+}
+
+
+//Gat all necesary files to parse config to Ansivle vars YML from remote hosts
+function getRemoteFiles($mastersArray, $slavesArray, $aggregatorsArray, $analyticsArray, $sensorsArray){
+
+    //Connect to worker
+    $connection = ssh2_connect($slavesArray[0], 22);
+    ssh2_auth_password($connection, 'root', 'opennac');
+    ssh2_scp_recv($connection, '/etc/raddb/clients.conf', '/tmp/slave_clients.conf');
+    ssh2_disconnect($connection);
+
+    //Connect to proxy
+    $connection = ssh2_connect($proxyArray[0], 22);
+    ssh2_auth_password($connection, 'root', 'opennac');
+    ssh2_scp_recv($connection, '/etc/raddb/proxy.conf', '/tmp/proxy.conf');
+    ssh2_scp_recv($connection, '/etc/raddb/clients.conf', '/tmp/proxy_clients.conf');
+    ssh2_disconnect($connection);
+
 }
 
 ###########################
@@ -188,18 +201,51 @@ function parse_clientsConf(){
     -------------
     */
 
-    $file = fopen("/etc/yum.repos.d/opennac.repo", "r");
+    $file = fopen("/etc/raddb/clients.conf", "r");
 
     if ($file) {
-        while (($line = fgets($file)) !== false) {
-
+        while (($line = fgets($file)) !== false ) {
+            
+            if (preg_match('/^client\s([^\s]+)/', $line, $clientMatch)){
+                if (strpos($clientMatch[1], "localhost") === false ){  
+                    $clientIp = $clientMatch[1];
+                    $line = fgets($file);
+    
+                    if (preg_match('/secret.*=(.*)/', $line, $clientMatch)){
+                        $clientSecret = $clientMatch[1];
+                        $line = fgets($file);
+                        if(preg_match('/shortname.*=(.*)/', $line, $clientMatch)){
+                            $clientShortname = $clientMatch[1];
+                        }
+                    }else{
+                        if (preg_match('/shortname.*=(.*)/', $line, $clientMatch)){
+                            $clientShortname = $clientMatch[1];
+                            $line = fgets($file);
+                            if(preg_match('/secret.*=(.*)/', $line, $clientMatch)){
+                                $clientSecret = $clientMatch[1];
+                            }
+                        }
+                    }
+                    
+                    $client = array(trim($clientIp), trim($clientSecret), trim($clientShortname));
+                    
+                    array_push($clients, $client);
+                    
+                    /*echo "IP --> " . $clientIp . "\n\n";
+                    echo "Secret --> " . $clientSecret . "\n\n";
+                    echo "Shortname --> " . $clientShortname . "\n\n";*/
+    
+                }
+            }
         }
+    
+        print_r($clients);
+    
         fclose($file);
     } else {
         // error opening the file.
-        echo "";
+        echo "Can't open /etc/raddb/clients.conf file \n\n";
     } 
-
 }
 
 function parse_postfix(){
@@ -239,16 +285,16 @@ function parse_clients_data_PROXY(){
 // We can use the IPs defined in /etc/hosts to get the maximum of variables connecting to each node of the infraestructure and get the values (example: proxy config, clients.conf)
 
 
-//1rst we wull read and parse all the information on /etc/hosts
+//1st we wull read and parse all the information on /etc/hosts
 
 $mastersArray = array();
 $slavesArray = array();
+$proxyArray = array();
 $aggregatorsArray = array();
 $analyticsArray = array();
 $sensorsArray = array();
 
 $hosts = fopen("/etc/hosts", "r");
-
 if ($hosts) {
     while (($line = fgets($hosts)) !== false) {
         // ((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])
@@ -266,15 +312,23 @@ if ($hosts) {
                     array_push($slavesArray, $hostMatch[1]);
                     break;
 
+                case (preg_match('/proxy.*/', $hostMatch[2]) ? true : false) :
+                case (preg_match('/prx.*/', $hostMatch[2]) ? true : false) :
+                    array_push($sensorsArray, $hostMatch[1]);
+                    break;
+
                 case (preg_match('/analytics.*/', $hostMatch[2]) ? true : false) :
+                case (preg_match('/ana.*/', $hostMatch[2]) ? true : false) :
                     array_push($analyticsArray, $hostMatch[1]);
                     break;
 
                 case (preg_match('/aggregator.*/', $hostMatch[2]) ? true : false) :
+                case (preg_match('/agg.*/', $hostMatch[2]) ? true : false) :
                     array_push($aggregatorArray, $hostMatch[1]);
                     break;
 
                 case (preg_match('/sensor.*/', $hostMatch[2]) ? true : false) :
+                case (preg_match('/sens.*/', $hostMatch[2]) ? true : false) :
                     array_push($sensorsArray, $hostMatch[1]);
                     break;
             }
@@ -286,13 +340,27 @@ if ($hosts) {
     echo "Can't open /etc/hosts file \n\n";
 } 
 
+
+###########################
+# PRINCIPAL CONFIGURATION #
+###########################
 parse_ntp();
 parse_repoAuth();
 parse_criticalAlert("admin", "opennac");
 parse_clientsConf();
 
 
+######################
+# WORKER REPLICATION #
+######################
+parse_mysqlReplication();
 
+#######################
+# PROXY CONFIGURATION #
+#######################
+parse_servers_data();
+parse_pools_data();
+parse_clients_data_PROXY();
 
 
 

@@ -25,7 +25,7 @@ check_changes() {
     $file = $(basename $arg1)
     $localFile = $local$file
     
-    if  [ -f $localFile ]; then echo "hola"
+    if  [ -f $localFile ]; then
         
         #diff <(md5sum opennac) <(md5sum opennac.md5)
         #cat opennac | tr -d '[:space:]' > opennac_cut
@@ -45,5 +45,3 @@ for i in "${filesToCheck[@]}"
 do
     check_changes $i
 done
-
-
