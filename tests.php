@@ -6,7 +6,7 @@ if ($hosts) {
     while (($line = fgets($hosts)) !== false) {
         // ((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])
 
-        if (preg_match('/((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])/', $lines, $hostMatch)){ 
+        if (preg_match('/((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])/', $line, $hostMatch)){ 
             echo "\nHost -> "; echo $hostMatch[1] . " --> " . $hostMatch[0] . "\n";
         }
 
