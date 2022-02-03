@@ -2,13 +2,233 @@
 
 // Script to generate the OpenNAC Ansible Vars file to deploy a migrated 1.2.2 infraestructure
 
+//--------------------------- 
+//   VARS  
+//---------------------------
+
+$ntpServers = array();
+$repoCredentials = "";
+
+$criticalAlertEmail = "notify1@opennac.org,notify2@opennac.org";
+$criticalAlertMailTitle = "openNAC policy message [%MSG%]";
+$criticalAlertMailContent = "";
+
+
+/*
+
+"clients_data"=> array(
+        array(
+            "sku"=> "BL394D",
+            "quantity"=> 4,
+            "description"=> "Basketball",
+            "price"=> 450,
+          ),
+
+clients_data: 
+  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
+  - [ip: '10.10.36.0/24', shortname: 'internal1010', secret: 'testing123']
+  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: 'testing123']
+  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: 'testing123']
+*/
+
+$relayhostName = 'relay.remote.com';
+$relayhostPort = '25';
+$mydomain = 'acme.local';
+$emailAddr = 'openNAC@notifications.mycompany.com';
+
+
+$mysql_root_password = "opennac" ;# Password for mysql root
+$mysql_replication_password_nagios = 'Simpl3PaSs';
 
 //--------------------------- 
 //   FUNCTIONS  
 //---------------------------
 
 
+function getToken( $url, $user, $password){
+    echo "\n GETTING TOKEN ...";
+    $curl = curl_init();
+    $url = $url."/auth";
+    $set_headers = array (
+        "accept" => "application/json",
+        "Content-Type" => "application/json"
+    );
 
+    $post_data = "{ \"username\": \"$user\", \"password\": \"$password\", \"useOnlyLocalRepo\": true}";
+    //URL a transmetre
+    curl_setopt($curl, CURLOPT_URL, $url);
+    //tornar el resultat de la crida sense tractar
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    //per fer una crida post
+    curl_setopt($curl, CURLOPT_POST, 1);
+    //afegim els headers a la crida
+    curl_setopt($curl, CURLOPT_HTTPHEADER, $set_headers);
+    //afegim l'append a la crida
+    curl_setopt($curl, CURLOPT_POSTFIELDS, $post_data);
+
+    $response = curl_exec($curl);
+    $error = curl_error ($curl);
+    $response = json_decode($response, true);
+
+    if (!empty($response) && empty($error)){
+        echo "token response --> " . print_r($response) . " \n\n";
+        $token = $response['token'];
+        echo " \n\033[32m GETTING TOKEN DONE \033[0m \n";
+    }else{
+        echo "API error getting Token\n". $error;
+        return false;
+    }
+    curl_close($curl);
+    return $token;
+}
+
+###########################
+# PRINCIPAL CONFIGURATION #
+###########################
+
+function parse_ntp(){
+
+    //^server\s+([^\s]+)
+    $file = fopen("/etc/ntp.conf", "r");
+
+    if ($file) {
+        while (($line = fgets($file)) !== false) {
+            if (preg_match('/^server\s+([^\s]+)/', $line, $hostMatch)){ 
+                echo "\NTP Server -> "; echo $hostMatch[1] . "\n";
+                array_push($ntpServers, $hostMatch[1]);
+            }
+        }
+        fclose($file);
+    } else {
+        // error opening the file.
+        echo "Can't open /etc/ntp.conf file \n\n";
+    } 
+
+}
+
+function parse_repoAuth(){
+
+    $repoOpennac = "repo-opennac.opencloudfactory.com/x86_64";
+    //^server\s+([^\s]+)
+    $file = fopen("/etc/yum.repos.d/opennac.repo", "r");
+
+    if ($file) {
+        while (($line = fgets($file)) !== false) {
+            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
+                if ($repoMatch[2] == $repoOpennac){
+                    $repoCredentials = $repoMatch[1];
+                    echo "Repo Credentials --> " .  $repoCredentials . "\n\n";
+                }else{
+                    echo "No OPENNAC Repo found please check it manually on /etc/yum.repos.d/ \n\n";
+                }
+            }else{
+                echo "No Repo Credentials found please check it manually on /etc/yum.repos.d/opennac.repo \n\n";
+            }
+        }
+        fclose($file);
+    } else {
+        // error opening the file.
+        echo "Can't open /etc/yum.repos.d/opennac.repo file \n\n";
+    } 
+
+}
+
+function parse_criticalAlert($user, $password){
+
+    $token = getToken("http://127.0.0.1/api", $user, $password);
+    
+    $ch = curl_init();
+    
+    curl_setopt($ch, CURLOPT_URL, 'https://127.0.0.1/api/configuration/notification');
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    
+    
+    $headers = array();
+    $headers[] = 'Accept: application/json';
+    $headers[] = 'X-Opennac-Token:' . $token;
+    $headers[] = 'X-Opennac-Username:' . $user;
+    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    
+    $response = curl_exec($ch);
+    
+    if (curl_errno($ch)) {
+        echo 'Error:' . curl_error($ch);
+    }else{
+    
+        $result = json_decode($response, true);
+    
+        $criticalAlertEmail =  $result['params']['alertcritical'];
+        $criticalAlertMailTitle = $result['params']['acmsgtitle'];
+        $criticalAlertMailContent = $result['params']['acmsgcontent'];
+    
+    
+        echo "Email ---> " . $criticalAlertEmail . "\n";
+        echo "Title ---> " . $criticalAlertMailTitle . "\n";
+        echo "Msg ---> " . $criticalAlertMailContent . "\n";
+    
+    }
+    curl_close($ch);
+
+}
+
+function parse_clientsConf(){
+    /*
+    -------------------------------
+    |   IP    |    IP   |    IP   |
+    -------------------------------
+        ^
+        |
+    -------------
+    |  secret   |
+    -------------
+    | shortname |
+    -------------
+    */
+
+    $file = fopen("/etc/yum.repos.d/opennac.repo", "r");
+
+    if ($file) {
+        while (($line = fgets($file)) !== false) {
+
+        }
+        fclose($file);
+    } else {
+        // error opening the file.
+        echo "";
+    } 
+
+}
+
+function parse_postfix(){
+
+}
+
+######################
+# WORKER REPLICATION #
+######################
+
+function parse_mysqlReplication(){
+
+}
+
+#######################
+# PROXY CONFIGURATION #
+#######################
+
+function parse_servers_data(){
+
+}
+
+function parse_pools_data(){
+
+}
+
+function parse_clients_data_PROXY(){
+
+}
 
 
 //--------------------------- 
@@ -20,14 +240,6 @@
 
 
 //1rst we wull read and parse all the information on /etc/hosts
-/*
-127.0.0.1       onmaster
-127.0.0.1       oncore
-10.10.36.82     on2 onslave
-10.10.36.81     onanalytics
-10.10.36.81     onaggregator
-10.10.36.147    onsensor
-*/
 
 $mastersArray = array();
 $slavesArray = array();
@@ -73,6 +285,35 @@ if ($hosts) {
     // error opening the file.
     echo "Can't open /etc/hosts file \n\n";
 } 
+
+parse_ntp();
+parse_repoAuth();
+parse_criticalAlert("admin", "opennac");
+parse_clientsConf();
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // -------------------------------------------------->>>    YAML EXAMPLE

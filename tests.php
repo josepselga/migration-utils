@@ -1,40 +1,83 @@
 <?php
 
-$hosts = fopen("/etc/hosts", "r");
 
-if ($hosts) {
-    while (($line = fgets($hosts)) !== false) {
-        // ((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])
+function getToken( $url, $user, $password){
+    echo "\n GETTING TOKEN ...";
+    $curl = curl_init();
+    $url = $url."/auth";
+    $set_headers = array (
+        "accept" => "application/json",
+        "Content-Type" => "application/json"
+    );
 
-        if (preg_match('/((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])/', $line, $hostMatch)){ 
-            echo "\nHost -> "; echo $hostMatch[1] . " --> " . $hostMatch[2] . "\n";
-            switch ($hostMatch[2]) {
+    $post_data = "{ \"username\": \"$user\", \"password\": \"$password\", \"useOnlyLocalRepo\": true}";
+    //URL a transmetre
+    curl_setopt($curl, CURLOPT_URL, $url);
+    //tornar el resultat de la crida sense tractar
+    curl_setopt($curl, CURLOPT_RETURNTRANSFER, true);
+    //per fer una crida post
+    curl_setopt($curl, CURLOPT_POST, 1);
+    //afegim els headers a la crida
+    curl_setopt($curl, CURLOPT_HTTPHEADER, $set_headers);
+    //afegim l'append a la crida
+    curl_setopt($curl, CURLOPT_POSTFIELDS, $post_data);
 
-                case (preg_match('/master.*/', $hostMatch[2]) ? true : false) :
-                        array_push($mastersArray, $hostMatch[1]);
-                        echo "master";
-                    break;
+    $response = curl_exec($curl);
+    $error = curl_error ($curl);
+    $response = json_decode($response, true);
 
-                case (preg_match('/slave.*/', $hostMatch[2]) ? true : false) : 
-                    array_push($slavesArray, $hostMatch[1]);
-                    break;
-
-                case (preg_match('/analytics.*/', $hostMatch[2]) ? true : false) :
-                    array_push($analyticsArray, $hostMatch[1]);
-                    break;
-
-                case (preg_match('/aggregator.*/', $hostMatch[2]) ? true : false) :
-                    array_push($aggregatorArray, $hostMatch[1]);
-                    break;
-
-                case (preg_match('/sensor.*/', $hostMatch[2]) ? true : false) :
-                    array_push($sensorsArray, $hostMatch[1]);
-                    break;
-            }
-        }
+    if (!empty($response) && empty($error)){
+        echo "token response --> " . print_r($response) . " \n\n";
+        $token = $response['token'];
+        echo " \n\033[32m GETTING TOKEN DONE \033[0m \n";
+    }else{
+        echo "API error getting Token\n". $error;
+        return false;
     }
-    fclose($hosts);
-} else {
-    // error opening the file.
-    echo "Can't open /etc/hosts file \n\n";
-} 
+    curl_close($curl);
+    return $token;
+}
+
+
+$user = "admin";
+$password = "opennac";
+$token = getToken("http://127.0.0.1/api", $user, $password);
+
+$ch = curl_init();
+
+curl_setopt($ch, CURLOPT_URL, 'https://127.0.0.1/api/configuration/notification');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+
+
+$headers = array();
+$headers[] = 'Accept: application/json';
+$headers[] = 'X-Opennac-Token:' . $token;
+$headers[] = 'X-Opennac-Username:' . $user;
+curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+
+$response = curl_exec($ch);
+
+if (curl_errno($ch)) {
+    echo 'Error:' . curl_error($ch);
+}else{
+
+    $result = json_decode($response, true);
+
+    $criticalAlertEmail =  $result['params']['alertcritical'];
+    $criticalAlertMailTitle = $result['params']['acmsgtitle'];
+    $criticalAlertMailContent = $result['params']['acmsgcontent'];
+
+
+    echo "Email ---> " . $criticalAlertEmail . "\n";
+    echo "Title ---> " . $criticalAlertMailTitle . "\n";
+    echo "Msg ---> " . $criticalAlertMailContent . "\n";
+
+}
+curl_close($ch);
+
+
+
+
