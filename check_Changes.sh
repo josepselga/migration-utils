@@ -4,7 +4,7 @@ onprincipal = $arg1
 ddbbName = opennac121_$(date +%d-%m-%Y).sql
 dbbPath = /tmp
 
-filesToCheck=( "/etc/raddb/eap.conf"
+filesToCheck=("/etc/raddb/eap.conf"
             "/etc/raddb/modules/opennac"
             "/etc/raddb/sites-available/inner-tunnel"
             "/etc/postfix/main.cf"
