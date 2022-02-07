@@ -348,7 +348,7 @@ if ($hosts) {
 ###########################
 parse_ntp();
 parse_repoAuth();
-parse_criticalAlert("admin", "opennac");
+//parse_criticalAlert("admin", "opennac"); // This configuration will be imported with the DB migration
 parse_clientsConf();
 
 
