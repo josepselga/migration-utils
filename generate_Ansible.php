@@ -287,6 +287,24 @@ function parse_clients_data_PROXY(){
 // We can use the IPs defined in /etc/hosts to get the maximum of variables connecting to each node of the infraestructure and get the values (example: proxy config, clients.conf)
 
 
+if ($argc > 1) {
+    foreach ($argv as $arg) {
+        switch ($arg) {
+                case '--help':
+                    help();
+                    break;
+                case '--assumeyes':
+                    $assumeYes = true;
+                    break;
+                default:
+                    echo "Invalid option: '$arg'\nTry '$command --help' for more information." . PHP_EOL;
+                    exit(1);
+        }
+    }
+}
+
+
+
 //1st we wull read and parse all the information on /etc/hosts
 
 $mastersArray = array();
@@ -372,11 +390,20 @@ parse_clients_data_PROXY();
 
 
 
+function help()
+{
+    global $argv;
+    echo "
+Usage: updatedb [options]
 
+Updates DB schema by applying pending db-deltas.
 
-
-
-
+Available options:
+    --help           display this help and exit
+    --assumeyes      automatic yes to prompts
+";
+    exit;
+}
 
 
 
