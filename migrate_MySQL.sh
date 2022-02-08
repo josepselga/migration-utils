@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 #Screen colour constants
@@ -8,31 +9,34 @@ LIGHT_BLUE='\033[0;34m'
 NC='\033[0m'
 
 
-ddbbName=opennac121_$(date +%d-%m-%Y).sql
+ddbbName=opennac121_$(date +%Y%m%d).sql
 ddbbPath="/tmp"
+help_menu=false
 SSH_KEY_SCRIPT="$(dirname "$0")/set_up_ssh_keys.sh"
+
+
+helpMenu(){
+
+    echo -e "\n${GREEN}Description:${NC}
+    This script will migrate the database (MySQL) from a Core 1.2.1 node to another Core 1.2.2 node.
+    It is recommended that both nodes are updated to the latest version.
+    It is essential to indicate the IP or host accessible by SSH of each of the two nodes.
+    
+    ${GREEN}Usage:${NC}
+        migrate_MySQL.sh -p [PRINCIPAL IP] -s [SLAVE IP]
+
+    ${GREEN}OPTIONS:${NC}
+        --principalPass = SSH password for root user on Principal (1.2.2) node
+        --slavePass = SSH password for root user on Slave (1.2.1) node
+        -h [help] --help = shows this menu\n\n"
+}
 
 # POST ANSIBLE DEPLOYMENT
 
 ## executar script al nou principal , fer mysql dump al slave (indicar manualment ip)
 
-: <<'END'
-while getopts p:x:s:z: flag
-do
-    case "${flag}" in
-        p) principal=${OPTARG};;
-        x) principalPassword=${OPTARG};;
-        s) slave=${OPTARG};;
-        z) slavePassword=${OPTARG};;
-        *)
-            echo 'Error in line parse' >&2
-            exit 1
-    esac
-done
-shift "$(( OPTIND - 1 ))"
-END
+# Parametres entrada
 
-# Cogemeos los diferentes argumentos que nos introduzcan
 while [ -n "$1" ]; do
     case "$1" in
     -p | --principal) principal=$2; shift 2;;
@@ -48,7 +52,7 @@ done
 # Si detectamos el parametro help, llamaremos a la funcion para mostrar las diferentes opciones
 if [ "$help_menu" = true ]
 then
-    help
+    helpMenu
     exit 0
 fi
 
@@ -79,43 +83,39 @@ else
     exit 0
 fi
 
-exit 0
-
 echo -e "\n${LIGHT_BLUE}[ON SLAVE 1.2.1]${NC}\n"
+
+scp $SSH_KEY_SCRIPT root@$slave:/tmp
+ssh root@$slave "chmod u+x /tmp/$(basename $SSH_KEY_SCRIPT) | /tmp/$(basename $SSH_KEY_SCRIPT) $principal $principalPassword"
+ssh root@$slave "rm -rf /tmp/$(basename $SSH_KEY_SCRIPT)"
+
 # Dump database
 echo -e "${YELLOW}  Dumping DB on slave node${NC}\n"
-ssh root@$slave "mysqldump -u root -popennac opennac > $dbbPath/$ddbbName"
+ssh root@$slave "mysqldump -u root -popennac opennac > $ddbbPath/$ddbbName"
 
-# Get database from slave
-#scp -i ~/.ssh/id_rsa opennac.sql root@onprincipal:$dbbPath/$ddbbName
-#scp -i ~/.ssh/id_rsa root@$onslave:$dbbPath/$ddbbName $ddbbPath/$ddbbName
-#scp root@$onslave:$ddbbPath/$ddbbName $ddbbPath/$ddbbName
+# Send database to principal
 echo -e "${YELLOW}  Sendind DB from slave (1.2.1) to principal (1.2.2)${NC}\n"
-ssh root@$slave "sshpass -p $principalPassword scp $dbbPath/$ddbbName root@$principal:$dbbPath/$ddbbName"
+ssh root@$slave "scp $ddbbPath/$ddbbName root@$principal:$ddbbPath/$ddbbName"
+
 
 # Get application.ini from slave 
-#scp -i ~/.ssh/id_rsa root@$onslave:/usr/share/opennac/api/application/configs/application.ini $ddbbPath/application.ini.old
-#scp root@$onslave:/usr/share/opennac/api/application/configs/application.ini $ddbbPath/application.ini.old
 echo -e "${YELLOW}  Sendind application.ini from slave (1.2.1) to principal (1.2.2)${NC}\n"
-ssh root@$slave "sshpass -p $principalPassword scp /usr/share/opennac/api/application/configs/application.ini root@$principal:$ddbbPath/application.ini.old"
+ssh root@$slave "scp /usr/share/opennac/api/application/configs/application.ini root@$principal:$ddbbPath/application.ini.old"
 
-#scp -i ~/.ssh/id_rsa root@$onslave:/usr/share/opennac/healthcheck/libexec/checkMysql.sh $ddbbPath/checkMysql.sh.old
-#scp root@$onslave:/usr/share/opennac/healthcheck/libexec/checkMysql.sh $ddbbPath/checkMysql.sh.old
 echo -e "${YELLOW}  Sendind checkMysql.sh from slave (1.2.1) to principal (1.2.2)${NC}\n"
-ssh root@$slave "sshpass -p $principalPassword scp /usr/share/opennac/healthcheck/libexec/checkMysql.sh root@$principal:$ddbbPath/checkMysql.sh.old"
+ssh root@$slave "scp /usr/share/opennac/healthcheck/libexec/checkMysql.sh root@$principal:$ddbbPath/checkMysql.sh.old"
 
 
 echo -e "${LIGHT_BLUE}[ON PRINCIPAL 1.2.2]${NC}\n"
 # Clear DDBB
 # Remove License
 echo -e "${YELLOW}  Removing old License in sql dump${NC}\n"
-ssh root@$principal "sed -i '/^INSERT\sINTO\s`LICENSES`\sVALUES/d' $ddbbPath/$ddbbName"
+ssh root@$principal "sed -i '/^INSERT\sINTO\s\`LICENSES\`\sVALUES/d' $ddbbPath/$ddbbName"
 
 # Nomenclator onmaster -> onprincipal
 echo -e "${YELLOW}  Changing nomenclator onmaster -> onprincipal in sql dump${NC}\n"
 ssh root@$principal "sed -i 's/whost=onmaster/whost=onprincipal/g' $ddbbPath/$ddbbName"
 
-# Connecto to the ON Principal and start de migration
 # Import the 1.2.1 DDBB
 echo -e "${YELLOW}  Importing sql dump to MariaDB${NC}\n"
 ssh root@$principal "mysql -u root -popennac opennac < $ddbbPath/$ddbbName"
@@ -124,9 +124,11 @@ ssh root@$principal "mysql -u root -popennac opennac < $ddbbPath/$ddbbName"
 echo -e "${YELLOW}  Restarting services${NC}\n"
 ssh root@$principal "systemctl restart redis | systemctl restart dhcp-helper-reader | systemctl restart mysqld | systemctl restart gearmand | systemctl restart radiusd | systemctl restart httpd | systemctl restart opennac | systemctl restart snmptrapd | systemctl restart collectd | systemctl restart filebeat | systemctl restart rsyslog"
 
+
 # Apply updatedb.php 
 echo -e "${YELLOW}  Applying updatedb.php (This may take a while)${NC}\n"
 ssh root@$principal "php /usr/share/opennac/api/scripts/updatedb.php --assumeyes"
+
 
 # Change application.ini passwords
 
@@ -135,16 +137,17 @@ ssh root@$principal "php /usr/share/opennac/api/scripts/updatedb.php --assumeyes
 ## application.ini i al mysql
 ## usuaris --> root / healthcheck / replicacio
 echo -e "${YELLOW}  Applying changes to application.ini${NC}\n"
-ssh root@$principal "usernameRDB = grep -oP 'resources.multidb.dbR.username.*' $ddbbPath/application.ini.old | 
-                     passwordRDB = grep -oP 'resources.multidb.dbR.password.*' $ddbbPath/application.ini.old | 
-                     usernameWDB = grep -oP 'resources.multidb.dbW.username.*' $ddbbPath/application.ini.old | 
-                     passwordWDB = grep -oP 'resources.multidb.dbW.password.*' $ddbbPath/application.ini.old"
+
+ssh root@$principal "usernameRDB=$(grep -oP 'resources.multidb.dbR.username.*' $ddbbPath/application.ini.old) | 
+                     passwordRDB=$(grep -oP 'resources.multidb.dbR.password.*' $ddbbPath/application.ini.old) | 
+                     usernameWDB=$(grep -oP 'resources.multidb.dbW.username.*' $ddbbPath/application.ini.old) | 
+                     passwordWDB=$(grep -oP 'resources.multidb.dbW.password.*' $ddbbPath/application.ini.old)"
 
 # Apply application.ini changes
-ssh root@$principal "sed -i "s/resources.multidb.dbR.username.*/$usernameRDB/g" /usr/share/opennac/api/application/configs/application.ini | 
-                     sed -i "s/resources.multidb.dbR.password.*/$usernameRDB/g" /usr/share/opennac/api/application/configs/application.ini | 
-                     sed -i "s/resources.multidb.dbW.username.*/$usernameRDB/g" /usr/share/opennac/api/application/configs/application.ini | 
-                     sed -i "s/resources.multidb.dbW.password.*/$usernameRDB/g" /usr/share/opennac/api/application/configs/application.ini"
+ssh root@$principal "sed -i "s/resources.multidb.dbR.username.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini | 
+                     sed -i "s/resources.multidb.dbR.password.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini | 
+                     sed -i "s/resources.multidb.dbW.username.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini | 
+                     sed -i "s/resources.multidb.dbW.password.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini"
 
 # Canviar password root mysql
 
@@ -157,16 +160,3 @@ ssh root@$principal "cp $ddbbPath/checkMysql.sh.old /usr/share/opennac/healthche
 
 
 echo -e "${GREEN}¡IMPORTANT! Remember that the portal password may have changed and a new license may need to be generated${NC}\n"
-
-
-
-help(){
-
-    echo -e "Usage:
-    dbReplication -t [deploy/fix] [OPTIONS]
-
-    OPTIONS:
-        --dest = ip of the node to fix or deploy. This can be the ip or a file containing all the ips of the secondary nodes. IMPORTANT: if we use a file, it must be in the same directory as the db_replication script
-        -h [help] --help = shows this menu
-        --src = ONLY used in fix mode. This is the ip of the source node. If it's not included or left blank the current node will be used."
-}
