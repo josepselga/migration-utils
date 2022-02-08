@@ -23,6 +23,8 @@ filesToCheckAnalytics=(
 
 filesChanged=()
 
+noRetrievedFiles=()
+
 # OpenNAC 1.2.1 migration to 1.2.2
 
 check_changes() {
@@ -40,7 +42,7 @@ check_changes() {
 
         if diff <(cat $1 | tr -d '[:space:]' | md5sum) <(cat $2 | tr -d '[:space:]' | md5sum) | grep '.*' > /dev/null; then
             #echo "Changes detected on --> " $1
-            filesChanged+=("$(basename $i)")
+            filesChanged+=($i)
         fi
     
     else
@@ -85,14 +87,22 @@ for i in "${filesToCheck[@]}"; do
         check_changes "./files/$type/$(basename $i)" "$tmpPath/$(basename $i)"
         rm -rf "$tmpPath/$(basename $i)"
     else
-        echo -e "${RED}Can't retrieve the file $i for host $node"
+        #echo -e "${RED}Can't retrieve the file $i for host $node${NC}"
+        noRetrievedFiles+=("$i")
     fi
 done
 
+if (( ${#noRetrievedFiles[@]} )); then
+    echo -e "\n${RED}The following files can't be retrieved:${NC}"
+    for z in "${noRetrievedFiles[@]}"; do
+        echo "                                                     $z"
+    done
+fi
+
 if [ ${#filesChanged[@]} -eq 0 ]; then
-    echo -e "\n\n${GREEN}No files appear to be modified${NC}\n"
+    echo -e "\n${GREEN}No files appear to be modified${NC}\n"
 else
-    echo -e "\n\n${RED}The following files appear to be modified:${NC}"
+    echo -e "\n${RED}The following files appear to be modified:${NC}"
     for z in "${filesChanged[@]}"; do
         echo "                                                     $z"
     done

@@ -64,10 +64,10 @@ sshKeys(){
 
     if [ $errors -eq 0 ];
     then
-        echo -e "${GREEN}All the nodes are accesible using SSH Keys${NC}\n"
+        #echo -e "${GREEN}All the nodes are accesible using SSH Keys${NC}\n"
         return 0
     else
-        echo -e "${RED}NOT all the nodes are accesible using SSH Keys${NC}\n"
+        #echo -e "${RED}NOT all the nodes are accesible using SSH Keys${NC}\n"
         return 1
     fi
 }
