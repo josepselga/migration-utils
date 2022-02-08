@@ -12,7 +12,7 @@ PASSWORD_FILE="/tmp/password.txt"
 
 sendSSHKeys(){
 
-    echo "Verifying if keys exists in destination.."
+    echo "Verifying if keys exists in destination..."
     #ssh -q -o StrictHostKeyChecking=accept-new root@"$1" exit
     res=$(ssh -q -o BatchMode=yes -o ConnectTimeout=2 root@"$1" echo ok 2>&1)
     if [ "$res" = "ok" ]; then

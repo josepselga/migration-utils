@@ -1,9 +1,9 @@
 #!/bin/bash
 
-onslave = $arg1
-son_slave_root_password = $arg2
+onslave = $1
+onslavePassword = $2
 ddbbName = opennac121_$(date +%d-%m-%Y).sql
-ddbbPath = /tmp
+ddbbPath = "/tmp"
 SSH_KEY_SCRIPT="./set_up_ssh_keys.sh"
 
 # POST ANSIBLE DEPLOYMENT
@@ -15,7 +15,7 @@ SSH_KEY_SCRIPT="./set_up_ssh_keys.sh"
 ####################
 
 #set up ssh keys
-sh "$SSH_KEY_SCRIPT" "$onslave $on_slave_root_password"
+sh "$SSH_KEY_SCRIPT" "$onslave $onslavePassword"
 
 # Dump database
 ssh root@$onslave "mysqldump -u root -popennac opennac > $dbbPath/$ddbbName"

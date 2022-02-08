@@ -1,10 +1,14 @@
 #!/bin/bash
 
-host=$1
-hostPassword=$2
+#Screen colour constants
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+LIGHT_BLUE='\033[0;34m'
+NC='\033[0m'
 
 tmpPath=/tmp
-SSH_KEY_SCRIPT="./set_up_ssh_keys.sh"
+SSH_KEY_SCRIPT="$(dirname "$0")/set_up_ssh_keys.sh"
 
 filesToCheckCore=("/etc/raddb/eap.conf"
             "/etc/raddb/modules/opennac"
@@ -24,7 +28,6 @@ filesChanged=()
 check_changes() {
     
     #for i in **; do [[ -f "$i" ]] && md5sum "$i" > "$i".md5; done
-
     #$confFile=$1
     #$local="/files/$2"
     #$file=$(basename $1)
@@ -35,7 +38,7 @@ check_changes() {
         #diff <(md5sum opennac) <(md5sum opennac.md5)
         #cat opennac | tr -d '[:space:]' > opennac_cut
 
-        if diff <(cat $1 | tr -d '[:space:]' | md5sum) <(cat $2 | tr -d '[:space:]' | md5sum); then
+        if diff <(cat $1 | tr -d '[:space:]' | md5sum) <(cat $2 | tr -d '[:space:]' | md5sum) | grep '.*' > /dev/null; then
             #echo "Changes detected on --> " $1
             filesChanged+=("$(basename $i)")
         fi
@@ -45,22 +48,53 @@ check_changes() {
     fi
 }
 
+node='NO-TARGET'
+type="core"
+password="opennac"
+
+while getopts n:t:p: flag
+do
+    case "${flag}" in
+        n) node=${OPTARG};;
+        t) type=${OPTARG};;
+        p) password=${OPTARG};;
+    esac
+done
+
 ## Comprovar modificaciones de la instalacion 
 
-## If Core:
-for i in "${filesToCheckCore[@]}" do
+case $type in
 
-    $SSH_KEY_SCRIPT "$host $hostPassword"
-    if scp root@$host:$i $tmpPath/$(basename $i) > 0; then
-        check_changes "/files/$(basename $i)" "$tmpPath/$(basename $i)" "Core"
+  ## If Core:
+  core)
+    type="Core"
+    filesToCheck=("${filesToCheckCore[@]}")  
+    ;;
+
+  ##If Analytics:
+  analytics)
+    type="Analytics"
+    filesToCheck=("${filesToCheckAnalytics[@]}")  
+    ;;
+esac
+
+$SSH_KEY_SCRIPT "$node" "$password"
+
+for i in "${filesToCheck[@]}"; do
+    if scp root@$node:$i $tmpPath/$(basename $i)&> /dev/null; then
+        check_changes "./files/$type/$(basename $i)" "$tmpPath/$(basename $i)"
+        rm -rf "$tmpPath/$(basename $i)"
     else
-        echo "Can't retrieve the file $i for host $host"
+        echo -e "${RED}Can't retrieve the file $i for host $node"
     fi
 done
 
-echo "The following files appear to be modified:"
-for z in "${filesChanged[@]}" do
-    echo "             $z"
-done
-
-##If Analytics:
+if [ ${#filesChanged[@]} -eq 0 ]; then
+    echo -e "\n\n${GREEN}No files appear to be modified${NC}\n"
+else
+    echo -e "\n\n${RED}The following files appear to be modified:${NC}"
+    for z in "${filesChanged[@]}"; do
+        echo "                                                     $z"
+    done
+    echo -e "\n"
+fi

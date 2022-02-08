@@ -6,31 +6,16 @@
 //   VARS  
 //---------------------------
 
+$target = "Target IP";
+$targetPassword = "Target Root Password";
+
 $ntpServers = array();
 $repoCredentials = "";
-
-$criticalAlertEmail = "notify1@opennac.org,notify2@opennac.org";
-$criticalAlertMailTitle = "openNAC policy message [%MSG%]";
-$criticalAlertMailContent = "";
-
-
-
 $clients = array();
-
-/*
-clients_data: 
-  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
-  - [ip: '10.10.36.0/24', shortname: 'internal1010', secret: 'testing123']
-  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: 'testing123']
-  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: 'testing123']
-*/
-
 $relayhostName = 'relay.remote.com';
 $relayhostPort = '25';
 $mydomain = 'acme.local';
 $emailAddr = 'openNAC@notifications.mycompany.com';
-
-
 $mysql_root_password = "opennac" ;# Password for mysql root
 $mysql_replication_password_nagios = 'Simpl3PaSs';
 
@@ -38,7 +23,61 @@ $mysql_replication_password_nagios = 'Simpl3PaSs';
 //   FUNCTIONS  
 //---------------------------
 
+function getEtcHosts(){
 
+    $mastersArray = array();
+    $slavesArray = array();
+    $proxyArray = array();
+    $aggregatorsArray = array();
+    $analyticsArray = array();
+    $sensorsArray = array();
+
+    $hosts = fopen("/etc/hosts", "r");
+    if ($hosts) {
+        while (($line = fgets($hosts)) !== false) {
+            // ((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])
+
+            if (preg_match('/((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])/', $line, $hostMatch)){ 
+                echo "\nHost -> "; echo $hostMatch[1] . " --> " . $hostMatch[2] . "\n";
+                switch ($hostMatch[2]) {
+
+                    case (preg_match('/master.*/', $hostMatch[2]) ? true : false) :
+                            array_push($mastersArray, $hostMatch[1]);
+                            echo "master";
+                        break;
+
+                    case (preg_match('/slave.*/', $hostMatch[2]) ? true : false) : 
+                        array_push($slavesArray, $hostMatch[1]);
+                        break;
+
+                    case (preg_match('/proxy.*/', $hostMatch[2]) ? true : false) :
+                    case (preg_match('/prx.*/', $hostMatch[2]) ? true : false) :
+                        array_push($sensorsArray, $hostMatch[1]);
+                        break;
+
+                    case (preg_match('/analytics.*/', $hostMatch[2]) ? true : false) :
+                    case (preg_match('/ana.*/', $hostMatch[2]) ? true : false) :
+                        array_push($analyticsArray, $hostMatch[1]);
+                        break;
+
+                    case (preg_match('/aggregator.*/', $hostMatch[2]) ? true : false) :
+                    case (preg_match('/agg.*/', $hostMatch[2]) ? true : false) :
+                        array_push($aggregatorArray, $hostMatch[1]);
+                        break;
+
+                    case (preg_match('/sensor.*/', $hostMatch[2]) ? true : false) :
+                    case (preg_match('/sens.*/', $hostMatch[2]) ? true : false) :
+                        array_push($sensorsArray, $hostMatch[1]);
+                        break;
+                }
+            }
+        }
+        fclose($hosts);
+    } else {
+        // error opening the file.
+        echo "Can't open /etc/hosts file \n\n";
+    } 
+}
 function getToken( $url, $user, $password){
     echo "\n GETTING TOKEN ...";
     $curl = curl_init();
@@ -75,8 +114,6 @@ function getToken( $url, $user, $password){
     curl_close($curl);
     return $token;
 }
-
-
 //Gat all necesary files to parse config to Ansivle vars YML from remote hosts
 function getRemoteFiles($mastersArray, $slavesArray, $aggregatorsArray, $analyticsArray, $sensorsArray){
 
@@ -94,11 +131,9 @@ function getRemoteFiles($mastersArray, $slavesArray, $aggregatorsArray, $analyti
     ssh2_disconnect($connection);
 
 }
-
 ###########################
 # PRINCIPAL CONFIGURATION #
 ###########################
-
 function parse_ntp(){
 
     //^server\s+([^\s]+)
@@ -118,7 +153,6 @@ function parse_ntp(){
     } 
 
 }
-
 function parse_repoAuth(){
 
     $repoOpennac = "repo-opennac.opencloudfactory.com/x86_64";
@@ -145,7 +179,6 @@ function parse_repoAuth(){
     } 
 
 }
-
 function parse_criticalAlert($user, $password){
 
     $token = getToken("http://127.0.0.1/api", $user, $password);
@@ -186,7 +219,6 @@ function parse_criticalAlert($user, $password){
     curl_close($ch);
 
 }
-
 function parse_clientsConf(){
     /*
     ----------------------------
@@ -249,33 +281,19 @@ function parse_clientsConf(){
         echo "Can't open /etc/raddb/clients.conf file \n\n";
     } 
 }
-
 function parse_postfix(){
-
 }
-
 ######################
 # WORKER REPLICATION #
 ######################
-
 function parse_mysqlReplication(){
-
 }
-
 #######################
 # PROXY CONFIGURATION #
 #######################
-
 function parse_servers_data(){
-
 }
-
 function parse_pools_data(){
-
-}
-
-function parse_clients_data_PROXY(){
-
 }
 
 
@@ -286,16 +304,22 @@ function parse_clients_data_PROXY(){
 //The idea is to parse all the 1.2.1 config and put into vars YAML file used to deploy an OpenNAC infraestructure so the new nodes will mantain the old ones config
 // We can use the IPs defined in /etc/hosts to get the maximum of variables connecting to each node of the infraestructure and get the values (example: proxy config, clients.conf)
 
-
 if ($argc > 1) {
     foreach ($argv as $arg) {
         switch ($arg) {
+            
                 case '--help':
                     help();
                     break;
-                case '--assumeyes':
-                    $assumeYes = true;
+
+                case '--type':
+                    $type = true;
                     break;
+
+                case '--target':
+                    $target = true;
+                    break;
+
                 default:
                     echo "Invalid option: '$arg'\nTry '$command --help' for more information." . PHP_EOL;
                     exit(1);
@@ -303,111 +327,59 @@ if ($argc > 1) {
     }
 }
 
-
-
 //1st we wull read and parse all the information on /etc/hosts
 
-$mastersArray = array();
-$slavesArray = array();
-$proxyArray = array();
-$aggregatorsArray = array();
-$analyticsArray = array();
-$sensorsArray = array();
+//getEtcHosts($target);
 
-$hosts = fopen("/etc/hosts", "r");
-if ($hosts) {
-    while (($line = fgets($hosts)) !== false) {
-        // ((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])
+shell_exec("sh ./set_up_ssh_keys.sh $target $targetPassword");
 
-        if (preg_match('/((?:[0-9]{1,3}\.){3}[0-9]{1,3})\s+(.*[^\s])/', $line, $hostMatch)){ 
-            echo "\nHost -> "; echo $hostMatch[1] . " --> " . $hostMatch[2] . "\n";
-            switch ($hostMatch[2]) {
+switch ($type) {
 
-                case (preg_match('/master.*/', $hostMatch[2]) ? true : false) :
-                        array_push($mastersArray, $hostMatch[1]);
-                        echo "master";
-                    break;
+    case "proxy":
+        getProxyFiles($target);
+        $ntp = parse_ntp();
+        $repoAuth = parse_repoAuth();
+        $servers = parse_servers_data();
+        $pols = parse_pools_data();
+        $clients = parse_clientsConf();
+        cleanProxyFiles();
+        generateAnsible_Proxy($ntp, $repoAuth, $servers, $pools, $clients);
+        break;
 
-                case (preg_match('/slave.*/', $hostMatch[2]) ? true : false) : 
-                    array_push($slavesArray, $hostMatch[1]);
-                    break;
+    case "core":
+        getCoreFiles($target);
+        //getEtcHosts($target);
+        $ntp = parse_ntp();
+        $repoAuth = parse_repoAuth();
+        //parse_criticalAlert("admin", "opennac"); // This configuration will be imported with the DB migration
+        $clients = parse_clientsConf();
+        $replication = parse_mysqlReplication();
+        generateAnsible_Core($ntp, $repoAuth, $clients, $replication);
+        cleanCoreFiles();
+        break;
 
-                case (preg_match('/proxy.*/', $hostMatch[2]) ? true : false) :
-                case (preg_match('/prx.*/', $hostMatch[2]) ? true : false) :
-                    array_push($sensorsArray, $hostMatch[1]);
-                    break;
+    case "analytics":
 
-                case (preg_match('/analytics.*/', $hostMatch[2]) ? true : false) :
-                case (preg_match('/ana.*/', $hostMatch[2]) ? true : false) :
-                    array_push($analyticsArray, $hostMatch[1]);
-                    break;
+        break;
 
-                case (preg_match('/aggregator.*/', $hostMatch[2]) ? true : false) :
-                case (preg_match('/agg.*/', $hostMatch[2]) ? true : false) :
-                    array_push($aggregatorArray, $hostMatch[1]);
-                    break;
-
-                case (preg_match('/sensor.*/', $hostMatch[2]) ? true : false) :
-                case (preg_match('/sens.*/', $hostMatch[2]) ? true : false) :
-                    array_push($sensorsArray, $hostMatch[1]);
-                    break;
-            }
-        }
-    }
-    fclose($hosts);
-} else {
-    // error opening the file.
-    echo "Can't open /etc/hosts file \n\n";
-} 
-
-
-###########################
-# PRINCIPAL CONFIGURATION #
-###########################
-parse_ntp();
-parse_repoAuth();
-//parse_criticalAlert("admin", "opennac"); // This configuration will be imported with the DB migration
-parse_clientsConf();
-
-
-######################
-# WORKER REPLICATION #
-######################
-parse_mysqlReplication();
-
-#######################
-# PROXY CONFIGURATION #
-#######################
-parse_servers_data();
-parse_pools_data();
-parse_clients_data_PROXY();
-
-
-
-
-
-
-
+}
 
 
 function help()
 {
     global $argv;
     echo "
-Usage: updatedb [options]
+Usage: Generate OpenNAC Ansible YAML [options]
 
-Updates DB schema by applying pending db-deltas.
+Generates the vars YAML for OpenNAC deployment using Ansible.
 
 Available options:
-    --help           display this help and exit
-    --assumeyes      automatic yes to prompts
+    --help          display this help and exit
+    --type          Set the type of the target (Core, Proxy, Analytics, Sensor)
+    --target        Set the target to get variables (IP)
 ";
     exit;
 }
-
-
-
-
 
 
 
