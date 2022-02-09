@@ -116,6 +116,23 @@ ssh root@$principal "sed -i '/^INSERT\sINTO\s\`LICENSES\`\sVALUES/d' $ddbbPath/$
 echo -e "${YELLOW}  Changing nomenclator onmaster -> onprincipal in sql dump${NC}\n"
 ssh root@$principal "sed -i 's/whost=onmaster/whost=onprincipal/g' $ddbbPath/$ddbbName"
 
+# Canviar password healthcheck
+ssh root@$principal "echo \"-- Custom Config from migration_MySQL script ( Update 1.2.2)\" >> $ddbbPath/$ddbbName"
+
+echo -e "${YELLOW}  Changing healthcheck nagios password in sql dump${NC}\n"
+ssh root@$principal "usernameRep=\$(sed -n \"s/.*-u\s*\(.*\)\s-p\s*'\(.*\)'/\1/p\" /tmp/checkMysql.sh.old) &&
+                     passwordRep=\$(sed -n \"s/.*-u\s*\(.*\)\s-p\s*'\(.*\)'/\2/p\" /tmp/checkMysql.sh.old) &&
+                     echo \"GRANT SUPER, REPLICATION CLIENT on *.* to '\$usernameRep'@'localhost' identified by '\$passwordRep';\" >> $ddbbPath/$ddbbName"
+
+
+# Canviar password admin mysql (opennac)
+echo -e "${YELLOW}  Changing admin user password in sql dump (from application.ini)${NC}\n"
+ssh root@$principal "usernameRDB=\$(sed -n \"s/resources.multidb.dbR.username\s*=\s*\(.*\)/\1/p\" $ddbbPath/application.ini.old) &&
+                     usernameRDB=\"\${usernameRDB:1:\${#usernameRDB}-2}\"  &&
+                     passwordRDB=\$(sed -n \"s/resources.multidb.dbR.password\s*=\s*\(.*\)/\1/p\" $ddbbPath/application.ini.old) && 
+                     passwordRDB=\"\${passwordRDB:1:\${#passwordRDB}-2}\"  && 
+                     echo \"GRANT ALL PRIVILEGES ON opennac.* TO '\$usernameRDB'@'localhost' identified by '\$passwordRDB';\" >> $ddbbPath/$ddbbName"
+
 # Import the 1.2.1 DDBB
 echo -e "${YELLOW}  Importing sql dump to MariaDB${NC}\n"
 ssh root@$principal "mysql -u root -popennac opennac < $ddbbPath/$ddbbName"
@@ -124,39 +141,20 @@ ssh root@$principal "mysql -u root -popennac opennac < $ddbbPath/$ddbbName"
 echo -e "${YELLOW}  Restarting services${NC}\n"
 ssh root@$principal "systemctl restart redis | systemctl restart dhcp-helper-reader | systemctl restart mysqld | systemctl restart gearmand | systemctl restart radiusd | systemctl restart httpd | systemctl restart opennac | systemctl restart snmptrapd | systemctl restart collectd | systemctl restart filebeat | systemctl restart rsyslog"
 
-
 # Apply updatedb.php 
 echo -e "${YELLOW}  Applying updatedb.php (This may take a while)${NC}\n"
 ssh root@$principal "php /usr/share/opennac/api/scripts/updatedb.php --assumeyes"
 
-
-# Change application.ini passwords
-
-### regex db info --> /resources\.multidb\.db[R|W]\.(username|password).*=.*"(.*)"/
-## We can take all match and replace in the new infra 
-## application.ini i al mysql
-## usuaris --> root / healthcheck / replicacio
+# Change application.ini config
 echo -e "${YELLOW}  Applying changes to application.ini${NC}\n"
-
-ssh root@$principal "usernameRDB=$(grep -oP 'resources.multidb.dbR.username.*' $ddbbPath/application.ini.old) | 
-                     passwordRDB=$(grep -oP 'resources.multidb.dbR.password.*' $ddbbPath/application.ini.old) | 
-                     usernameWDB=$(grep -oP 'resources.multidb.dbW.username.*' $ddbbPath/application.ini.old) | 
-                     passwordWDB=$(grep -oP 'resources.multidb.dbW.password.*' $ddbbPath/application.ini.old)"
-
-# Apply application.ini changes
-ssh root@$principal "sed -i "s/resources.multidb.dbR.username.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini | 
-                     sed -i "s/resources.multidb.dbR.password.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini | 
-                     sed -i "s/resources.multidb.dbW.username.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini | 
-                     sed -i "s/resources.multidb.dbW.password.*/'$usernameRDB'/g" /usr/share/opennac/api/application/configs/application.ini"
-
-# Canviar password root mysql
+ssh root@$principal "usernameRDB=\$(grep resources.multidb.dbR.username.* $ddbbPath/application.ini.old) &&  sed -i \"s/resources.multidb.dbR.username.*\$/\$usernameRDB/\" /usr/share/opennac/api/application/configs/application.ini"
+ssh root@$principal "passwordRDB=\$(grep resources.multidb.dbR.password.* $ddbbPath/application.ini.old) &&  sed -i \"s/resources.multidb.dbR.password.*\$/\$passwordRDB/\" /usr/share/opennac/api/application/configs/application.ini"
+ssh root@$principal "usernameWDB=\$(grep resources.multidb.dbW.username.* $ddbbPath/application.ini.old) &&  sed -i \"s/resources.multidb.dbW.username.*\$/\$usernameWDB/\" /usr/share/opennac/api/application/configs/application.ini"
+ssh root@$principal "passwordWDB=\$(grep resources.multidb.dbW.password.* $ddbbPath/application.ini.old) &&  sed -i \"s/resources.multidb.dbW.password.*\$/\$passwordWDB/\" /usr/share/opennac/api/application/configs/application.ini"
 
 # Canviar usuari healthcheck
 echo -e "${YELLOW}  Applying changes to checkMysql.sh${NC}\n"
 ssh root@$principal "cp $ddbbPath/checkMysql.sh.old /usr/share/opennac/healthcheck/libexec/checkMysql.sh"
 
-# Canviar usuari replicacio
-
-
-
+#BYE
 echo -e "${GREEN}¡IMPORTANT! Remember that the portal password may have changed and a new license may need to be generated${NC}\n"
