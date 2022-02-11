@@ -26,8 +26,8 @@ helpMenu(){
         migrate_MySQL.sh -p [PRINCIPAL IP] -s [SLAVE IP]
 
     ${GREEN}OPTIONS:${NC}
-        --principalPass = SSH password for root user on Principal (1.2.2) node
-        --slavePass = SSH password for root user on Slave (1.2.1) node
+        --principalPass = SSH password for root user on Principal (1.2.2) node (default = opennac)
+        --slavePass = SSH password for root user on Slave (1.2.1) node (default = opennac)
         -h [help] --help = shows this menu\n\n"
 }
 

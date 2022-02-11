@@ -9,8 +9,6 @@
 $target = "Target IP";
 $targetPassword = "Target Root Password";
 
-$ntpServers = array();
-$repoCredentials = "";
 $clients = array();
 $relayhostName = 'relay.remote.com';
 $relayhostPort = '25';
@@ -131,10 +129,33 @@ function getRemoteFiles($mastersArray, $slavesArray, $aggregatorsArray, $analyti
     ssh2_disconnect($connection);
 
 }
+
+function getFiles($target, $files, $local){
+    //Connect to target
+    $connection = ssh2_connect($target, 22);
+    #ssh2_auth_password($connection, 'root', 'opennac');
+    #$connect = ssh2_connect($target, 22);
+    if(ssh2_auth_pubkey_file($connect, 'root', '/root/.ssh/id_rsa.pub'))
+    {
+        echo "Public Key Authentication Successful\n";
+        echo "Retrieving files...\n";
+        foreach ($files as $file) {
+            ssh2_scp_recv($connection, $file, "$local/basename($file)");
+        }
+    }
+    else
+    {
+        echo "Public Key Authentication Failed\n";
+    }
+    ssh2_disconnect($connection);
+}
 ###########################
 # PRINCIPAL CONFIGURATION #
 ###########################
 function parse_ntp(){
+
+    #$ntpServers = array();
+    $ntpServer = "";
 
     //^server\s+([^\s]+)
     $file = fopen("/etc/ntp.conf", "r");
@@ -143,7 +164,8 @@ function parse_ntp(){
         while (($line = fgets($file)) !== false) {
             if (preg_match('/^server\s+([^\s]+)/', $line, $hostMatch)){ 
                 echo "\NTP Server -> "; echo $hostMatch[1] . "\n";
-                array_push($ntpServers, $hostMatch[1]);
+                #array_push($ntpServers, $hostMatch[1]);
+                $ntpServer = $hostMatch[1];
             }
         }
         fclose($file);
@@ -151,10 +173,12 @@ function parse_ntp(){
         // error opening the file.
         echo "Can't open /etc/ntp.conf file \n\n";
     } 
-
+    #return $ntpServers;
+    return $ntpServer;
 }
 function parse_repoAuth(){
 
+    $repoCredentials = "";
     $repoOpennac = "repo-opennac.opencloudfactory.com/x86_64";
     //^server\s+([^\s]+)
     $file = fopen("/etc/yum.repos.d/opennac.repo", "r");
@@ -165,11 +189,7 @@ function parse_repoAuth(){
                 if ($repoMatch[2] == $repoOpennac){
                     $repoCredentials = $repoMatch[1];
                     echo "Repo Credentials --> " .  $repoCredentials . "\n\n";
-                }else{
-                    echo "No OPENNAC Repo found please check it manually on /etc/yum.repos.d/ \n\n";
                 }
-            }else{
-                echo "No Repo Credentials found please check it manually on /etc/yum.repos.d/opennac.repo \n\n";
             }
         }
         fclose($file);
@@ -177,7 +197,7 @@ function parse_repoAuth(){
         // error opening the file.
         echo "Can't open /etc/yum.repos.d/opennac.repo file \n\n";
     } 
-
+    return $repoCredentials;
 }
 function parse_criticalAlert($user, $password){
 
@@ -281,7 +301,66 @@ function parse_clientsConf(){
         echo "Can't open /etc/raddb/clients.conf file \n\n";
     } 
 }
-function parse_postfix(){
+function parse_postfix($maincf, $generic){
+
+    $relayhostName = "relay.remote.com";
+    $relayhostPort = "25";
+    $mydomain = "acme.local";
+    $emailAddr = "openNAC@notifications.mycompany.com";
+
+    $file = fopen($maincf, "r");
+
+    if ($file) {
+        while (($line = fgets($file)) !== false) {
+            #$relayhostName
+            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
+                if ($repoMatch[2] == $repoOpennac){
+                    $repoCredentials = $repoMatch[1];
+                    echo "Postfix relay Host --> " .  $repoCredentials . "\n\n";
+                }
+            }
+            #$relayhostPort
+            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
+                if ($repoMatch[2] == $repoOpennac){
+                    $repoCredentials = $repoMatch[1];
+                    echo "Postfix Relay Port --> " .  $repoCredentials . "\n\n";
+                }
+            }
+
+        }
+        fclose($file);
+    } else {
+        // error opening the file.
+        echo "Can't open /etc/yum.repos.d/opennac.repo file \n\n";
+    } 
+
+    $file = fopen($generic, "r");
+
+    if ($file) {
+        while (($line = fgets($file)) !== false) {
+            #$mydomain
+            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
+                if ($repoMatch[2] == $repoOpennac){
+                    $repoCredentials = $repoMatch[1];
+                    echo "Postfix domain --> " .  $repoCredentials . "\n\n";
+                }
+            }
+            #$emailAddr
+            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
+                if ($repoMatch[2] == $repoOpennac){
+                    $repoCredentials = $repoMatch[1];
+                    echo "Postfix Email --> " .  $repoCredentials . "\n\n";
+                }
+            }
+        }
+        fclose($file);
+    } else {
+        // error opening the file.
+        echo "Can't open /etc/yum.repos.d/opennac.repo file \n\n";
+    } 
+
+    return $repoCredentials;
+
 }
 ######################
 # WORKER REPLICATION #
@@ -328,7 +407,6 @@ if ($argc > 1) {
 }
 
 //1st we wull read and parse all the information on /etc/hosts
-
 //getEtcHosts($target);
 
 shell_exec("sh ./set_up_ssh_keys.sh $target $targetPassword");
@@ -336,23 +414,27 @@ shell_exec("sh ./set_up_ssh_keys.sh $target $targetPassword");
 switch ($type) {
 
     case "proxy":
-        getProxyFiles($target);
-        $ntp = parse_ntp();
+        $files = array ();
+        $folder = "/tmp/generateAnsible";
+        getFiles($target, $files, $folder); //Get necesary files and store on /tmp/generateAnsible
+        $ntp = parse_ntp($folder . "/");
         $repoAuth = parse_repoAuth();
         $servers = parse_servers_data();
-        $pols = parse_pools_data();
+        $pools = parse_pools_data();
         $clients = parse_clientsConf();
         cleanProxyFiles();
         generateAnsible_Proxy($ntp, $repoAuth, $servers, $pools, $clients);
         break;
 
     case "core":
-        getCoreFiles($target);
+        $files = array ();
+        $local = "/tmp";
+        getFiles($target, $files, $local);
         //getEtcHosts($target);
-        $ntp = parse_ntp();
-        $repoAuth = parse_repoAuth();
+        $ntp = parse_ntp("$local/");
+        $repoAuth = parse_repoAuth("$local/");
         //parse_criticalAlert("admin", "opennac"); // This configuration will be imported with the DB migration
-        $clients = parse_clientsConf();
+        $clients = parse_clientsConf("$local/clients.conf");
         $replication = parse_mysqlReplication();
         generateAnsible_Core($ntp, $repoAuth, $clients, $replication);
         cleanCoreFiles();
@@ -363,7 +445,6 @@ switch ($type) {
         break;
 
 }
-
 
 function help()
 {
@@ -384,6 +465,55 @@ Available options:
 
 
 
+// -------------------------------------------------->>>    YAML EXAMPLE
+/*
+
+################
+# INSTALLATION #
+################
+
+ntpserv1: '0.centos.pool.ntp.org'
+repo_auth: 'user:password' 
+
+PRINCIPAL CONFIGURATION 
+
+clients_data: 
+  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
+  - [ip: '10.10.36.0/24', shortname: 'internal1010', secret: 'testing123']
+  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: 'testing123']
+  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: 'testing123']
+
+relayhostName: 'relay.remote.com' ---> main.cf
+relayhostPort: '25' ---> main.cf
+mydomain: 'acme.local' ---> /etc/postfix/generic i main.cf
+emailAddr: 'openNAC@notifications.mycompany.com'  ---> /etc/postfix/generic
+
+
+WORKER REPLICATION
+
+mysql_root_password: opennac  # el pass sempre sera opennac no?
+mysql_replication_password_nagios: 'Simpl3PaSs' # es el pasword que s utilitza o el que es defineix?
+
+
+PROXY CONFIGURATION
+
+sharedkey: 'CHANGE_ME'
+
+servers_data:
+  - [name: 'slv01lata', ipaddr: '10.111.16.72', secret: '{{ sharedkey }}']
+  - [name: 'slv02latb', ipaddr: '10.111.16.73', secret: '{{ sharedkey }}']
+
+pools_data:
+  - [namepool: 'auth', namerealm: 'DEFAULT']
+
+clients_data_PROXY:
+  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: '{{ sharedkey }}']
+  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: '{{ sharedkey }}']
+  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: '{{ sharedkey }}']
+
+*/
+
+
 
 // -------------------------------------------------->>>    YAML EXAMPLE
 /*
@@ -394,10 +524,6 @@ Available options:
 
 inventory: 'static'
 ntpserv1: '0.centos.pool.ntp.org' # A NTP server where you must get the synchronization
-
-# The version packages that we want to be installed
-# It could be the stable version or the testing one
-# Change it if necessary
 deploy_testing_version: false
 repo_auth: 'user:password' # CHANGE the actual user and password
 
