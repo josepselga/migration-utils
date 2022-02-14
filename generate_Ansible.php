@@ -308,55 +308,52 @@ function parse_postfix($maincf, $generic){
     $mydomain = "acme.local";
     $emailAddr = "openNAC@notifications.mycompany.com";
 
+
+    #### /etc/postfix/main.cf.
+    /*
+        relayhost = [smtp.gmail.com]:587
+        smtp_use_tls = yes
+        smtp_sasl_auth_enable = yes
+        smtp_sasl_security_options =
+        smtp_sasl_password_maps = hash:/etc/postfix/sasl_passwd
+        smtp_tls_CAfile = /etc/ssl/certs/ca-bundle.crt
+    */
     $file = fopen($maincf, "r");
 
     if ($file) {
         while (($line = fgets($file)) !== false) {
-            #$relayhostName
-            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
-                if ($repoMatch[2] == $repoOpennac){
-                    $repoCredentials = $repoMatch[1];
-                    echo "Postfix relay Host --> " .  $repoCredentials . "\n\n";
-                }
+            #$relayhostName and #$relayhostPort
+            # ^relayhost\s+=\s+\[(.*)]:(.*)$
+            if (preg_match('/^relayhost\s+=\s+\[(.*)]:(.*)$/', $line, $relayMatch)){ 
+                $relayhostName = $relayMatch[1];
+                $relayhostPort = $relayMatch[2];
+                echo "Postfix relay Host --> " .  $relayhostName . "\n\n";
+                echo "Postfix relay Port --> " .  $relayhostPort . "\n\n";
             }
-            #$relayhostPort
-            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
-                if ($repoMatch[2] == $repoOpennac){
-                    $repoCredentials = $repoMatch[1];
-                    echo "Postfix Relay Port --> " .  $repoCredentials . "\n\n";
-                }
-            }
-
         }
         fclose($file);
     } else {
         // error opening the file.
-        echo "Can't open /etc/yum.repos.d/opennac.repo file \n\n";
+        echo "Can't open /etc/postfix/main.cf file \n\n";
     } 
 
     $file = fopen($generic, "r");
 
     if ($file) {
         while (($line = fgets($file)) !== false) {
-            #$mydomain
-            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
-                if ($repoMatch[2] == $repoOpennac){
-                    $repoCredentials = $repoMatch[1];
-                    echo "Postfix domain --> " .  $repoCredentials . "\n\n";
-                }
-            }
-            #$emailAddr
-            if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
-                if ($repoMatch[2] == $repoOpennac){
-                    $repoCredentials = $repoMatch[1];
-                    echo "Postfix Email --> " .  $repoCredentials . "\n\n";
-                }
+            #$mydomain and $emailAddr
+            #^(?!#)(.*)\s+(.*)$
+            if (preg_match('/^(?!#)(.*)\s+(.*)$/', $line, $emailMatch)){ 
+                $mydomain = $emailMatch[1];
+                $emailAddr = $emailMatch[2];
+                echo "Postfix domain --> " .  $mydomain . "\n\n";
+                echo "Postfix email --> " .  $mydomain . "\n\n";
             }
         }
         fclose($file);
     } else {
         // error opening the file.
-        echo "Can't open /etc/yum.repos.d/opennac.repo file \n\n";
+        echo "Can't open /etc/postfix/generic file \n\n";
     } 
 
     return $repoCredentials;
@@ -365,7 +362,24 @@ function parse_postfix($maincf, $generic){
 ######################
 # WORKER REPLICATION #
 ######################
-function parse_mysqlReplication(){
+function parse_mysqlReplication($file){
+    
+    $file = fopen($maincf, "r");
+
+    if ($file) {
+        while (($line = fgets($file)) !== false) {
+            #$relayhostName and #$relayhostPort
+            # ^relayhost\s+=\s+\[(.*)]:(.*)$
+            if (preg_match('/.* -u\s+(.*)\s+-p\s+\'(.*)\'/', $line, $relayMatch)){ 
+                $nagiosPass = $relayMatch[2];
+                echo "MySQL Nagios Pass --> " .  $nagiosPass . "\n\n";
+            }
+        }
+        fclose($file);
+    } else {
+        // error opening the file.
+        echo "Can't open /usr/share/opennac/healthcheck/libexec/checkMysql.sh file \n\n";
+    } 
 }
 #######################
 # PROXY CONFIGURATION #
@@ -461,7 +475,6 @@ Available options:
 ";
     exit;
 }
-
 
 
 

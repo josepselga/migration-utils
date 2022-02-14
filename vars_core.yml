@@ -1,0 +1,7 @@
+################
+    # INSTALLATION #
+    ################
+    
+    inventory: static
+    timezone_custom: Europe/Madrid
+    ntpserv: 0.centos.pool.ntp.org # A NTP server where you must get the synchronization
