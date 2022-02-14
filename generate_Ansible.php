@@ -5,8 +5,6 @@
 //--------------------------- 
 //   VARS  
 //---------------------------
-$target = "Target-IP";
-$targetPassword = "Target-Root-Password";
 $mysql_root_password = "opennac" ;
 
 //--------------------------- 
@@ -109,22 +107,37 @@ function getToken( $url, $user, $password){
 function getFiles($target, $targetPassword, $files, $local){
     //Connect to target
     $connection = ssh2_connect($target, 22);
-    #ssh2_auth_password($connection, 'root', 'opennac');
-    #$connect = ssh2_connect($target, 22);
-    if(ssh2_auth_password($connection, 'root', $targetPassword)){
-        echo "Password Authentication Successful\n";
-        echo "Retrieving files...\n";
-        foreach ($files as $file) {
-            $basename = basename($file);
-            ssh2_scp_recv($connection, $file, "$local/$basename");
+    if($connection){
+        #ssh2_auth_password($connection, 'root', 'opennac');
+        #$connect = ssh2_connect($target, 22);
+        if(ssh2_auth_password($connection, 'root', $targetPassword)){
+            echo "Password Authentication Successful\n";
+            echo "Retrieving files...\n";
+            foreach ($files as $file) {
+                $basename = basename($file);
+                ssh2_scp_recv($connection, $file, "$local/$basename");
+            }
+            ssh2_disconnect($connection);
         }
+        else
+        {
+            echo "Password Authentication Failed\n";
+            ssh2_disconnect($connection);
+            exit;
+        }
+    }else{
+        echo "Can't connect to host via SSH: $target\n";
+        exit;
     }
-    else
-    {
-        echo "Password Authentication Failed\n";
-    }
-    ssh2_disconnect($connection);
 }
+
+function removeTmpFiles($files, $local){
+    foreach ($files as $file) {
+        $basename = basename($file);
+        unlink("$local/$basename");
+    }
+}
+
 
 function parse_ntp($file){
 
@@ -453,35 +466,39 @@ clients_data_PROXY:
 //The idea is to parse all the 1.2.1 config and put into vars YAML file used to deploy an OpenNAC infraestructure so the new nodes will mantain the old ones config
 // We can use the IPs defined in /etc/hosts to get the maximum of variables connecting to each node of the infraestructure and get the values (example: proxy config, clients.conf)
 
-$argv = $_SERVER['argv'];
-$totalArgv = count($argv);
+$shortopts  = "t:";  // Target (must)
+$shortopts .= "p:"; // Target Password
 
-if ($argc > 1) {
-    foreach ($argv as $arg) {
-        switch ($arg) {
-                case '--help':
-                    help();
-                    break;
+$longopts  = array(
+    "type:"    // Target Type
+);
 
-                case '--type':
-                    $type = true;
-                    break;
-
-                case '--target':
-                    $target = true;
-                    break;
-
-                default:
-                    echo "Invalid option: '$arg'\nTry '$command --help' for more information." . PHP_EOL;
-                    exit(1);
-        }
-    }
-}
+$options = getopt($shortopts, $longopts);
 
 //1st we wull read and parse all the information on /etc/hosts
 //getEtcHosts($target);
-$target = "10.10.36.80";
-$targetPassword = "opennac";
+
+if (!$options["t"]){
+    echo "No target specified, pleas select a target \"-t\"\n\n";
+    exit;
+}else{
+    $target = $options["t"];
+}
+
+if (!$options["p"]){
+    echo "No root password specified, using default...\n\n";
+    $targetPassword = "opennac";
+}else{
+    $targetPassword = $options["p"];
+}
+
+if (!$options["type"]){
+    echo "No node targed specified, using default (core)...\n\n";
+    $targetPassword = "opennac";
+}else{
+    $type = $options["type"];
+}
+
 $files = array("/etc/raddb/clients.conf", 
                 "/etc/postfix/main.cf", 
                 "/etc/postfix/generic", 
@@ -521,7 +538,7 @@ echo "\n\n---------------------------------------------------------\n\n";
 
 generateAnsibleVars("./tmpFiles", $ntp, $repoAuth, $clients, $postfix, $replication);
 
-
+removeTmpFiles($files, "./tmpFiles");
 
 
 /*
