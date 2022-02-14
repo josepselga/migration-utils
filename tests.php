@@ -5,17 +5,9 @@
 //--------------------------- 
 //   VARS  
 //---------------------------
-
-$target = "Target IP";
-$targetPassword = "Target Root Password";
-
-$clients = array();
-$relayhostName = 'relay.remote.com';
-$relayhostPort = '25';
-$mydomain = 'acme.local';
-$emailAddr = 'openNAC@notifications.mycompany.com';
-$mysql_root_password = "opennac" ;# Password for mysql root
-$mysql_replication_password_nagios = 'Simpl3PaSs';
+$target = "Target-IP";
+$targetPassword = "Target-Root-Password";
+$mysql_root_password = "opennac" ;
 
 //--------------------------- 
 //   FUNCTIONS  
@@ -112,46 +104,28 @@ function getToken( $url, $user, $password){
     curl_close($curl);
     return $token;
 }
-//Gat all necesary files to parse config to Ansivle vars YML from remote hosts
-function getRemoteFiles($mastersArray, $slavesArray, $aggregatorsArray, $analyticsArray, $sensorsArray){
 
-    //Connect to worker
-    $connection = ssh2_connect($slavesArray[0], 22);
-    ssh2_auth_password($connection, 'root', 'opennac');
-    ssh2_scp_recv($connection, '/etc/raddb/clients.conf', '/tmp/slave_clients.conf');
-    ssh2_disconnect($connection);
-
-    //Connect to proxy
-    $connection = ssh2_connect($proxyArray[0], 22);
-    ssh2_auth_password($connection, 'root', 'opennac');
-    ssh2_scp_recv($connection, '/etc/raddb/proxy.conf', '/tmp/proxy.conf');
-    ssh2_scp_recv($connection, '/etc/raddb/clients.conf', '/tmp/proxy_clients.conf');
-    ssh2_disconnect($connection);
-
-}
-
-function getFiles($target, $files, $local){
+//Get all necesary files to parse config to Ansivle vars YML from remote hosts
+function getFiles($target, $targetPassword, $files, $local){
     //Connect to target
     $connection = ssh2_connect($target, 22);
     #ssh2_auth_password($connection, 'root', 'opennac');
     #$connect = ssh2_connect($target, 22);
-    if(ssh2_auth_pubkey_file($connect, 'root', '/root/.ssh/id_rsa.pub'))
-    {
-        echo "Public Key Authentication Successful\n";
+    if(ssh2_auth_password($connection, 'root', $targetPassword)){
+        echo "Password Authentication Successful\n";
         echo "Retrieving files...\n";
         foreach ($files as $file) {
-            ssh2_scp_recv($connection, $file, "$local/basename($file)");
+            $basename = basename($file);
+            ssh2_scp_recv($connection, $file, "$local/$basename");
         }
     }
     else
     {
-        echo "Public Key Authentication Failed\n";
+        echo "Password Authentication Failed\n";
     }
     ssh2_disconnect($connection);
 }
-###########################
-# PRINCIPAL CONFIGURATION #
-###########################
+
 function parse_ntp($file){
 
     #$ntpServers = array();
@@ -357,11 +331,8 @@ function parse_postfix($maincf, $generic){
     } 
     return $postfixConfig;
 }
-######################
-# WORKER REPLICATION #
-######################
 function parse_mysqlReplication($file){
-    
+    $nagiosPass = 'Simpl3PaSs';
     $file = fopen($file, "r");
     $nagiosPass = "";
     if ($file) {
@@ -380,14 +351,10 @@ function parse_mysqlReplication($file){
     }
     return $nagiosPass;
 }
-#######################
-# PROXY CONFIGURATION #
-#######################
 function parse_servers_data(){
 }
 function parse_pools_data(){
 }
-
 
 
 function generateAnsibleVars($location, $ntp, $repoAuth, $clients, $postfix, $replication){
@@ -513,34 +480,46 @@ if ($argc > 1) {
 
 //1st we wull read and parse all the information on /etc/hosts
 //getEtcHosts($target);
+$target = "10.10.36.80";
+$targetPassword = "opennac";
+$files = array("/etc/raddb/clients.conf", 
+                "/etc/postfix/main.cf", 
+                "/etc/postfix/generic", 
+                "/etc/ntp.conf", 
+                "/usr/share/opennac/healthcheck/libexec/checkMysql.sh",
+                "/etc/yum.repos.d/opennac.repo");
+
+//shell_exec("sh ./set_up_ssh_keys.sh $target $targetPassword");
+
+getFiles($target, $targetPassword, $files, "./tmpFiles");
 
 echo "\n\n";
-$ntp = parse_ntp("/tmp/tests_opennac/ntp.conf");
+$ntp = parse_ntp("./tmpFiles/ntp.conf");
 echo "NTP Servers: \n\n";
 print_r ($ntp);
 echo "\n---------------------------------------------------------\n\n";
 
-$repoAuth = parse_repoAuth("/tmp/tests_opennac/opennac.repo");
+$repoAuth = parse_repoAuth("./tmpFiles/opennac.repo");
 echo "REPO Auth: \n\n";
 echo "    " . $repoAuth;
 echo "\n\n---------------------------------------------------------\n\n";
 
-$clients = parse_clientsConf("/tmp/tests_opennac/clients.conf");
+$clients = parse_clientsConf("./tmpFiles/clients.conf");
 echo "Clients.conf: \n\n";
 print_r ($clients);
 echo "\n---------------------------------------------------------\n\n";
 
-$postfix = parse_postfix("/tmp/tests_opennac/main.cf", "/tmp/tests_opennac/generic");
+$postfix = parse_postfix("./tmpFiles/main.cf", "./tmpFiles/generic");
 echo "Postfix Config: \n\n";
 print_r ($postfix);
 echo "\n---------------------------------------------------------\n\n";
 
-$replication = parse_mysqlReplication("/tmp/tests_opennac/checkMysql.sh");
+$replication = parse_mysqlReplication("./tmpFiles/checkMysql.sh");
 echo "Nagios Pass: \n\n";
 echo "    " . $replication;
 echo "\n\n---------------------------------------------------------\n\n";
 
-generateAnsibleVars("/tmp/tests_opennac", $ntp, $repoAuth, $clients, $postfix, $replication);
+generateAnsibleVars("./tmpFiles", $ntp, $repoAuth, $clients, $postfix, $replication);
 
 
 
@@ -584,6 +563,8 @@ switch ($type) {
 
 }
 
+*/
+
 function help()
 {
     global $argv;
@@ -599,5 +580,3 @@ Available options:
 ";
     exit;
 }
-
-*/

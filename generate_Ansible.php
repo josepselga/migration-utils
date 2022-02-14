@@ -5,17 +5,9 @@
 //--------------------------- 
 //   VARS  
 //---------------------------
-
-$target = "Target IP";
-$targetPassword = "Target Root Password";
-
-$clients = array();
-$relayhostName = 'relay.remote.com';
-$relayhostPort = '25';
-$mydomain = 'acme.local';
-$emailAddr = 'openNAC@notifications.mycompany.com';
-$mysql_root_password = "opennac" ;# Password for mysql root
-$mysql_replication_password_nagios = 'Simpl3PaSs';
+$target = "Target-IP";
+$targetPassword = "Target-Root-Password";
+$mysql_root_password = "opennac" ;
 
 //--------------------------- 
 //   FUNCTIONS  
@@ -112,60 +104,45 @@ function getToken( $url, $user, $password){
     curl_close($curl);
     return $token;
 }
-//Gat all necesary files to parse config to Ansivle vars YML from remote hosts
-function getRemoteFiles($mastersArray, $slavesArray, $aggregatorsArray, $analyticsArray, $sensorsArray){
 
-    //Connect to worker
-    $connection = ssh2_connect($slavesArray[0], 22);
-    ssh2_auth_password($connection, 'root', 'opennac');
-    ssh2_scp_recv($connection, '/etc/raddb/clients.conf', '/tmp/slave_clients.conf');
-    ssh2_disconnect($connection);
-
-    //Connect to proxy
-    $connection = ssh2_connect($proxyArray[0], 22);
-    ssh2_auth_password($connection, 'root', 'opennac');
-    ssh2_scp_recv($connection, '/etc/raddb/proxy.conf', '/tmp/proxy.conf');
-    ssh2_scp_recv($connection, '/etc/raddb/clients.conf', '/tmp/proxy_clients.conf');
-    ssh2_disconnect($connection);
-
-}
-
-function getFiles($target, $files, $local){
+//Get all necesary files to parse config to Ansivle vars YML from remote hosts
+function getFiles($target, $targetPassword, $files, $local){
     //Connect to target
     $connection = ssh2_connect($target, 22);
     #ssh2_auth_password($connection, 'root', 'opennac');
     #$connect = ssh2_connect($target, 22);
-    if(ssh2_auth_pubkey_file($connect, 'root', '/root/.ssh/id_rsa.pub'))
-    {
-        echo "Public Key Authentication Successful\n";
+    if(ssh2_auth_password($connection, 'root', $targetPassword)){
+        echo "Password Authentication Successful\n";
         echo "Retrieving files...\n";
         foreach ($files as $file) {
-            ssh2_scp_recv($connection, $file, "$local/basename($file)");
+            $basename = basename($file);
+            ssh2_scp_recv($connection, $file, "$local/$basename");
         }
     }
     else
     {
-        echo "Public Key Authentication Failed\n";
+        echo "Password Authentication Failed\n";
     }
     ssh2_disconnect($connection);
 }
-###########################
-# PRINCIPAL CONFIGURATION #
-###########################
-function parse_ntp(){
+
+function parse_ntp($file){
 
     #$ntpServers = array();
-    $ntpServer = "";
+    $ntpServers = array();
 
     //^server\s+([^\s]+)
-    $file = fopen("/etc/ntp.conf", "r");
+    $file = fopen($file, "r");
 
     if ($file) {
+        $i=1;
         while (($line = fgets($file)) !== false) {
             if (preg_match('/^server\s+([^\s]+)/', $line, $hostMatch)){ 
-                echo "\NTP Server -> "; echo $hostMatch[1] . "\n";
-                #array_push($ntpServers, $hostMatch[1]);
+                //echo "NTP Server -> "; echo $hostMatch[1] . "\n";
+                $ntpServers["NTPServ.$i"]=$hostMatch[1];
+                //array_push($ntpServers, $hostMatch[1]);
                 $ntpServer = $hostMatch[1];
+                $i++;
             }
         }
         fclose($file);
@@ -173,23 +150,22 @@ function parse_ntp(){
         // error opening the file.
         echo "Can't open /etc/ntp.conf file \n\n";
     } 
-    #return $ntpServers;
-    return $ntpServer;
+    return $ntpServers;
 }
-function parse_repoAuth(){
+function parse_repoAuth($file){
 
     $repoCredentials = "";
     $repoOpennac = "repo-opennac.opencloudfactory.com/x86_64";
     //^server\s+([^\s]+)
-    $file = fopen("/etc/yum.repos.d/opennac.repo", "r");
+    $file = fopen($file, "r");
 
     if ($file) {
         while (($line = fgets($file)) !== false) {
             if (preg_match('/^baseurl.+?\/\/(.+?)@(.+)$/', $line, $repoMatch)){ 
-                if ($repoMatch[2] == $repoOpennac){
+                //if ($repoMatch[0] == $repoOpennac){
                     $repoCredentials = $repoMatch[1];
-                    echo "Repo Credentials --> " .  $repoCredentials . "\n\n";
-                }
+                    //echo "Repo Credentials --> " .  $repoCredentials . "\n";
+                //}
             }
         }
         fclose($file);
@@ -239,7 +215,7 @@ function parse_criticalAlert($user, $password){
     curl_close($ch);
 
 }
-function parse_clientsConf(){
+function parse_clientsConf($file){
     /*
     ----------------------------
     |   0    |    1   |    2   |
@@ -254,8 +230,8 @@ function parse_clientsConf(){
     | shortname |
     -------------
     */
-
-    $file = fopen("/etc/raddb/clients.conf", "r");
+    $clients = array();
+    $file = fopen($file, "r");
 
     if ($file) {
         while (($line = fgets($file)) !== false ) {
@@ -281,25 +257,19 @@ function parse_clientsConf(){
                         }
                     }
                     
-                    $client = array(trim($clientIp), trim($clientSecret), trim($clientShortname));
+                    $client = array("IP" => trim($clientIp), "Key" => trim($clientSecret), "Name" =>  trim($clientShortname));
                     
                     array_push($clients, $client);
                     
-                    /*echo "IP --> " . $clientIp . "\n\n";
-                    echo "Secret --> " . $clientSecret . "\n\n";
-                    echo "Shortname --> " . $clientShortname . "\n\n";*/
-    
                 }
             }
         }
-    
-        print_r($clients);
-    
         fclose($file);
     } else {
         // error opening the file.
         echo "Can't open /etc/raddb/clients.conf file \n\n";
     } 
+    return $clients;
 }
 function parse_postfix($maincf, $generic){
 
@@ -319,7 +289,7 @@ function parse_postfix($maincf, $generic){
         smtp_tls_CAfile = /etc/ssl/certs/ca-bundle.crt
     */
     $file = fopen($maincf, "r");
-
+    $postfixConfig = array();
     if ($file) {
         while (($line = fgets($file)) !== false) {
             #$relayhostName and #$relayhostPort
@@ -327,8 +297,10 @@ function parse_postfix($maincf, $generic){
             if (preg_match('/^relayhost\s+=\s+\[(.*)]:(.*)$/', $line, $relayMatch)){ 
                 $relayhostName = $relayMatch[1];
                 $relayhostPort = $relayMatch[2];
-                echo "Postfix relay Host --> " .  $relayhostName . "\n\n";
-                echo "Postfix relay Port --> " .  $relayhostPort . "\n\n";
+                $postfixConfig["Relay Host"]=$relayMatch[1];
+                $postfixConfig["Relay Port"]=$relayMatch[2];
+                //echo "Postfix relay Host --> " .  $relayhostName . "\n\n";
+                //echo "Postfix relay Port --> " .  $relayhostPort . "\n\n";
             }
         }
         fclose($file);
@@ -343,11 +315,13 @@ function parse_postfix($maincf, $generic){
         while (($line = fgets($file)) !== false) {
             #$mydomain and $emailAddr
             #^(?!#)(.*)\s+(.*)$
-            if (preg_match('/^(?!#)(.*)\s+(.*)$/', $line, $emailMatch)){ 
+            if (preg_match('/^(?!#)(.*?)[\s](.*)$/', $line, $emailMatch)){ 
                 $mydomain = $emailMatch[1];
                 $emailAddr = $emailMatch[2];
-                echo "Postfix domain --> " .  $mydomain . "\n\n";
-                echo "Postfix email --> " .  $mydomain . "\n\n";
+                $postfixConfig["Postfix Domain"]=$emailMatch[1];
+                $postfixConfig["Postfix Email"]=$emailMatch[2];
+                //echo "Postfix domain --> " .  $mydomain . "\n\n";
+                //echo "Postfix email --> " .  $emailAddr . "\n\n";
             }
         }
         fclose($file);
@@ -355,40 +329,122 @@ function parse_postfix($maincf, $generic){
         // error opening the file.
         echo "Can't open /etc/postfix/generic file \n\n";
     } 
-
-    return $repoCredentials;
-
+    return $postfixConfig;
 }
-######################
-# WORKER REPLICATION #
-######################
 function parse_mysqlReplication($file){
-    
-    $file = fopen($maincf, "r");
-
+    $nagiosPass = 'Simpl3PaSs';
+    $file = fopen($file, "r");
+    $nagiosPass = "";
     if ($file) {
         while (($line = fgets($file)) !== false) {
             #$relayhostName and #$relayhostPort
             # ^relayhost\s+=\s+\[(.*)]:(.*)$
             if (preg_match('/.* -u\s+(.*)\s+-p\s+\'(.*)\'/', $line, $relayMatch)){ 
                 $nagiosPass = $relayMatch[2];
-                echo "MySQL Nagios Pass --> " .  $nagiosPass . "\n\n";
             }
         }
         fclose($file);
+
     } else {
         // error opening the file.
         echo "Can't open /usr/share/opennac/healthcheck/libexec/checkMysql.sh file \n\n";
-    } 
+    }
+    return $nagiosPass;
 }
-#######################
-# PROXY CONFIGURATION #
-#######################
 function parse_servers_data(){
 }
 function parse_pools_data(){
 }
 
+
+function generateAnsibleVars($location, $ntp, $repoAuth, $clients, $postfix, $replication){
+
+    $clientString="";
+    $clientsString="";
+
+    //- [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
+    foreach ($clients as $client){
+        $clientString = "    - [ip: '". $client['IP'] ."', shortname: '". $client['Name'] ."', secret: '". $client['Key'] ."']\n";
+        $clientsString .= $clientString;
+    }
+    
+    $core_vars = fopen("$location/vars_core.yml", "w") or die("Unable to generate vars file!");
+    $txt = "
+################
+# INSTALLATION #
+################
+
+inventory: 'static'
+timezone_custom: 'Europe/Madrid'
+ntpserv: '" . $ntp['NTPServ.1'] ."' # A NTP server where you must get the synchronization
+
+# The version packages that we want to be installed
+# It could be the stable version or the testing one
+# Change it if necessary
+deploy_testing_version: false
+repo_auth: '" . $repoAuth . "' # CHANGE the actual user and password
+
+
+###########################
+# PRINCIPAL CONFIGURATION #
+###########################
+
+criticalAlertEmail: 'notify1@opennac.org,notify2@opennac.org'
+criticalAlertMailTitle: 'openNAC policy message [%MSG%]'
+criticalAlertMailContent: 'Alert generated by policy [%RULENAME%], on %DATE%.\\n\\nData:\\nMAC: %MAC%\\nUser: %USERID%\\nIP Switch: %SWITCHIP%\\nPort: %SWITCHPORT% - %SWITCHPORTID%\\n'
+
+
+# Variables to configure /etc/raddb/clients.conf
+clients_data: 
+" . $clientsString . "
+
+# Variables to configure /etc/postfix/main.cf and /etc/postfix/generic
+relayhostName: '" . $postfix['Relay Host'] . "'
+relayhostPort: '" . $postfix['Relay Port'] . "'
+mydomain: '" . $postfix['Postfix Domain'] . "'
+emailAddr: '" . $postfix['Postfix Email'] . "'
+
+
+######################
+# WORKER REPLICATION #
+######################
+
+mysql_root_password: opennac # Password for mysql root
+mysql_replication_password_nagios: '" . $replication ."'
+path: /tmp/ # The path to save the dump .sql file
+
+
+#######################
+# PROXY CONFIGURATION #
+#######################
+
+sharedkey: 'CHANGE_ME' # The string to encrypt the packets between the Proxy Servers and Backends
+
+# PROXY.CONF
+# Edit the following lines in order to configure /etc/raddb/proxy.conf
+# You may either need to add new lines or to delete some.
+servers_data:
+    - [name: 'slv01lata', ipaddr: '10.111.16.72', secret: '{{ sharedkey }}']
+    - [name: 'slv02latb', ipaddr: '10.111.16.73', secret: '{{ sharedkey }}']
+
+pools_data:
+    - [namepool: 'auth', namerealm: 'DEFAULT']
+
+# CLIENTS.CONF
+# Edit the following lines in order to configure /etc/raddb/clients.conf
+# You may either need to add new lines or to delete some. 
+# Follow the structure indicated below:
+clients_data_PROXY:
+    - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: '{{ sharedkey }}']
+    - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: '{{ sharedkey }}']
+    - [ip: '10.0.0.0/8', shortname: 'internal10', secret: '{{ sharedkey }}']
+
+";
+
+    fwrite($core_vars, $txt);
+    
+    fclose($core_vars);
+}
 
 //--------------------------- 
 //   START OF EXECUTION   
@@ -397,10 +453,12 @@ function parse_pools_data(){
 //The idea is to parse all the 1.2.1 config and put into vars YAML file used to deploy an OpenNAC infraestructure so the new nodes will mantain the old ones config
 // We can use the IPs defined in /etc/hosts to get the maximum of variables connecting to each node of the infraestructure and get the values (example: proxy config, clients.conf)
 
+$argv = $_SERVER['argv'];
+$totalArgv = count($argv);
+
 if ($argc > 1) {
     foreach ($argv as $arg) {
         switch ($arg) {
-            
                 case '--help':
                     help();
                     break;
@@ -422,6 +480,51 @@ if ($argc > 1) {
 
 //1st we wull read and parse all the information on /etc/hosts
 //getEtcHosts($target);
+$target = "10.10.36.80";
+$targetPassword = "opennac";
+$files = array("/etc/raddb/clients.conf", 
+                "/etc/postfix/main.cf", 
+                "/etc/postfix/generic", 
+                "/etc/ntp.conf", 
+                "/usr/share/opennac/healthcheck/libexec/checkMysql.sh",
+                "/etc/yum.repos.d/opennac.repo");
+
+//shell_exec("sh ./set_up_ssh_keys.sh $target $targetPassword");
+
+getFiles($target, $targetPassword, $files, "./tmpFiles");
+
+echo "\n\n";
+$ntp = parse_ntp("./tmpFiles/ntp.conf");
+echo "NTP Servers: \n\n";
+print_r ($ntp);
+echo "\n---------------------------------------------------------\n\n";
+
+$repoAuth = parse_repoAuth("./tmpFiles/opennac.repo");
+echo "REPO Auth: \n\n";
+echo "    " . $repoAuth;
+echo "\n\n---------------------------------------------------------\n\n";
+
+$clients = parse_clientsConf("./tmpFiles/clients.conf");
+echo "Clients.conf: \n\n";
+print_r ($clients);
+echo "\n---------------------------------------------------------\n\n";
+
+$postfix = parse_postfix("./tmpFiles/main.cf", "./tmpFiles/generic");
+echo "Postfix Config: \n\n";
+print_r ($postfix);
+echo "\n---------------------------------------------------------\n\n";
+
+$replication = parse_mysqlReplication("./tmpFiles/checkMysql.sh");
+echo "Nagios Pass: \n\n";
+echo "    " . $replication;
+echo "\n\n---------------------------------------------------------\n\n";
+
+generateAnsibleVars("./tmpFiles", $ntp, $repoAuth, $clients, $postfix, $replication);
+
+
+
+
+/*
 
 shell_exec("sh ./set_up_ssh_keys.sh $target $targetPassword");
 
@@ -460,6 +563,8 @@ switch ($type) {
 
 }
 
+*/
+
 function help()
 {
     global $argv;
@@ -475,130 +580,3 @@ Available options:
 ";
     exit;
 }
-
-
-
-// -------------------------------------------------->>>    YAML EXAMPLE
-/*
-
-################
-# INSTALLATION #
-################
-
-ntpserv1: '0.centos.pool.ntp.org'
-repo_auth: 'user:password' 
-
-PRINCIPAL CONFIGURATION 
-
-clients_data: 
-  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
-  - [ip: '10.10.36.0/24', shortname: 'internal1010', secret: 'testing123']
-  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: 'testing123']
-  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: 'testing123']
-
-relayhostName: 'relay.remote.com' ---> main.cf
-relayhostPort: '25' ---> main.cf
-mydomain: 'acme.local' ---> /etc/postfix/generic i main.cf
-emailAddr: 'openNAC@notifications.mycompany.com'  ---> /etc/postfix/generic
-
-
-WORKER REPLICATION
-
-mysql_root_password: opennac  # el pass sempre sera opennac no?
-mysql_replication_password_nagios: 'Simpl3PaSs' # es el pasword que s utilitza o el que es defineix?
-
-
-PROXY CONFIGURATION
-
-sharedkey: 'CHANGE_ME'
-
-servers_data:
-  - [name: 'slv01lata', ipaddr: '10.111.16.72', secret: '{{ sharedkey }}']
-  - [name: 'slv02latb', ipaddr: '10.111.16.73', secret: '{{ sharedkey }}']
-
-pools_data:
-  - [namepool: 'auth', namerealm: 'DEFAULT']
-
-clients_data_PROXY:
-  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: '{{ sharedkey }}']
-  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: '{{ sharedkey }}']
-  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: '{{ sharedkey }}']
-
-*/
-
-
-
-// -------------------------------------------------->>>    YAML EXAMPLE
-/*
-
-################
-# INSTALLATION #
-################
-
-inventory: 'static'
-ntpserv1: '0.centos.pool.ntp.org' # A NTP server where you must get the synchronization
-deploy_testing_version: false
-repo_auth: 'user:password' # CHANGE the actual user and password
-
-
-###########################
-# PRINCIPAL CONFIGURATION #
-###########################
-
-criticalAlertEmail: 'notify1@opennac.org,notify2@opennac.org'
-criticalAlertMailTitle: 'openNAC policy message [%MSG%]'
-criticalAlertMailContent: 'Alert generated by policy [%RULENAME%], on %DATE%.\n\nData:\nMAC: %MAC%\nUser: %USERID%\nIP Switch: %SWITCHIP%\nPort: %SWITCHPORT% - %SWITCHPORTID%\n'
-
-
-# Variables to configure /etc/raddb/clients.conf
-clients_data: 
-  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: 'testing123']
-  - [ip: '10.10.36.0/24', shortname: 'internal1010', secret: 'testing123']
-  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: 'testing123']
-  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: 'testing123']
-
-# Variables to configure /etc/postfix/main.cf and /etc/postfix/generic
-relayhostName: 'relay.remote.com'
-relayhostPort: '25'
-mydomain: 'acme.local'
-emailAddr: 'openNAC@notifications.mycompany.com'
-
-
-######################
-# WORKER REPLICATION #
-######################
-
-mysql_root_password: opennac # Password for mysql root
-mysql_replication_password_nagios: 'Simpl3PaSs'
-
-# Path where will be saved files created with the script WITHOUT THE LAST "/"
-# Make sure you have enough space
-path: /tmp
-
-
-#######################
-# PROXY CONFIGURATION #
-#######################
-
-sharedkey: 'CHANGE_ME' # The string to encrypt the packets between the Proxy Servers and Backends
-
-# PROXY.CONF
-# Edit the following lines in order to configure /etc/raddb/proxy.conf
-# You may either need to add new lines or to delete some.
-servers_data:
-  - [name: 'slv01lata', ipaddr: '10.111.16.72', secret: '{{ sharedkey }}']
-  - [name: 'slv02latb', ipaddr: '10.111.16.73', secret: '{{ sharedkey }}']
-
-pools_data:
-  - [namepool: 'auth', namerealm: 'DEFAULT']
-
-# CLIENTS.CONF
-# Edit the following lines in order to configure /etc/raddb/clients.conf
-# You may either need to add new lines or to delete some. 
-# Follow the structure indicated below:
-clients_data_PROXY:
-  - [ip: '192.168.0.0/16', shortname: 'internal192168', secret: '{{ sharedkey }}']
-  - [ip: '172.16.0.0/16', shortname: 'internal17216', secret: '{{ sharedkey }}']
-  - [ip: '10.0.0.0/8', shortname: 'internal10', secret: '{{ sharedkey }}']
-
-*/
