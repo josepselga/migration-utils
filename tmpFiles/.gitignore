@@ -1,1 +1,3 @@
-/tmpFiles/*
+*
+*/
+!.gitignore
