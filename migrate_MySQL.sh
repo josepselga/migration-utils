@@ -33,17 +33,18 @@ helpMenu(){
 
 # POST ANSIBLE DEPLOYMENT
 
-## executar script al nou principal , fer mysql dump al slave (indicar manualment ip)
-
 # Parametres entrada
 
 while [ -n "$1" ]; do
     case "$1" in
     -p | --principal) principal=$2; shift 2;;
     -s | --slave) slave=$2; shift 2;;
+    -f | --file) file=$2; shift 2;;
     -h | --help) help_menu=true; shift ;;
     --principalPass) principalPassword=$2; shift 2;;
     --slavePass) slavePassword=$2; shift 2;;
+    --mysqlpass) slavePassword=$2; shift 2;;
+    --healthpass) slavePassword=$2; shift 2;;
     --) shift; break ;;
     *) break ;;
     esac
