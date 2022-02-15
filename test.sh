@@ -57,7 +57,6 @@ then
     exit 0
 fi
 
-
 if [ -z "$principal" ]; then
     echo -e "${RED}Missing -p (Principal Target)${NC}"
     exit 1
@@ -74,12 +73,12 @@ if [ -z "$slave" ] && ([ -z "$mysqlpass" ] || [ -z "$healthpass" ]); then
     echo -e "${RED}If you use the -f option, please set mysql admin (--mysqlpass) and healthcheck (--healthpass) password.\n You can find this values on application.ini and checkMysql.sh${NC}"
     exit 1
 fi
-if [ -n "$slave" ] && [ -z "$principalPassword" ]; then
-    echo -e "${YELLOW}Missing -pp (Principal Pasword), using default \"opennac\"${NC}"
+if [ -n "$principal" ] && [ -z "$principalPassword" ]; then
+    echo -e "${YELLOW}Missing --principalPass (Principal Pasword), using default \"opennac\"${NC}"
     principalPassword='opennac'
 fi
 if [ -n "$slave" ] && [ -z "$slavePassword" ]; then
-    echo -e "${YELLOW}Missing -pp (Principal Pasword), using default \"opennac\"${NC}"
+    echo -e "${YELLOW}Missing --slavePass (Slave Pasword), using default \"opennac\"${NC}"
     slavePassword='opennac'
 fi
 if [ -f "$file" ]; then

@@ -18,5 +18,5 @@ echo "newAnalytics: $fullname";
 
 #newAnalytics = $arg1
 
-#elasticdump --input=http://localhost:9200/my_index --output=http://$newAnalytics:9200/my_index --type=mapping
-#elasticdump --input=http://localhost:9200/my_index --output=http://$newAnalytics:9200/my_index --type=data --limit=10000
+elasticdump --input=http://$oldAnalytics:9200/my_index --output=http://$newAnalytics:9200/my_index --type=mapping
+elasticdump --input=http://$oldAnalytics:9200/my_index --output=http://$newAnalytics:9200/my_index --type=data --limit=10000
