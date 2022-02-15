@@ -50,6 +50,20 @@ check_changes() {
     fi
 }
 
+
+post_install_noMove() {
+      
+    for sample in $(find /usr/share/opennac/ -name *.ini.sample)
+    do
+            oldini=$(echo ${sample} | sed 's_.sample__')
+            diff=$(diff ${sample} ${oldini} 1>/dev/null; echo $?)
+            if [ "${diff}" -eq 1 ] && [[ "${oldini}" != *"otp/config.ini" ]]
+            then
+                    echo -e "\n${oldini}"
+            fi
+    done
+}
+
 node='NO-TARGET'
 type="core"
 password="opennac"
@@ -82,29 +96,42 @@ esac
 
 $SSH_KEY_SCRIPT "$node" "$password"
 
+
+
+echo -e "\n${YELLOW}Checking installation files...${NC}\n"
+
 for i in "${filesToCheck[@]}"; do
     if scp root@$node:$i $tmpPath/$(basename $i)&> /dev/null; then
         check_changes "./files/$type/$(basename $i)" "$tmpPath/$(basename $i)"
         rm -rf "$tmpPath/$(basename $i)"
+        echo "$tmpPath/$(basename $i)"
     else
         #echo -e "${RED}Can't retrieve the file $i for host $node${NC}"
         noRetrievedFiles+=("$i")
     fi
 done
 
+
+
+echo -e "\n${YELLOW}Checking opennac .sample files...${NC}\n"
+echo -e "${RED}The following files appear to be modified based on .sample:${NC}"
+
+ssh root@$node "$(typeset -f post_install_noMove); post_install_noMove" 
+
+
 if (( ${#noRetrievedFiles[@]} )); then
     echo -e "\n${RED}The following files can't be retrieved:${NC}"
     for z in "${noRetrievedFiles[@]}"; do
-        echo "                                                     $z"
+        echo "$z"
     done
 fi
 
 if [ ${#filesChanged[@]} -eq 0 ]; then
-    echo -e "\n${GREEN}No files appear to be modified${NC}\n"
+    echo -e "\n${GREEN}No files appear to be modified based on OVA.${NC}\n"
 else
-    echo -e "\n${RED}The following files appear to be modified:${NC}"
+    echo -e "\n${RED}The following files appear to be modified based on OVA:${NC}"
     for z in "${filesChanged[@]}"; do
-        echo "                                                     $z"
+        echo "$z"
     done
     echo -e "\n"
 fi
