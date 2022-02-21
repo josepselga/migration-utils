@@ -2,31 +2,30 @@
 <?php
 
 
-$deviceUserMapper = new Application_Model_DeviceuserMapper();
-$networkDeviceMapper = new Application_Model_DeviceMapper();
 
-$configEnv = Common_Config::get()->{"production"};
+$vars = file("./tmpFiles/vars_core.yml");
 
-$dbdata = $configEnv->resources->multidb->dbR->toArray();
-$dbR = Zend_Db::factory('PDO_MYSQL',$dbdata);
+$toAdd = array("1\n","2\n","3\n","4\n");
 
-//$netdevicesInGroups = $dbR->fetchAll('SELECT GROUPS.ID, GROUPS.ID_ITEM, GROUPS_CATEG.NAME, GROUPS.ID_GROUPS_CATEG FROM GROUPS JOIN GROUPS_CATEG ON (GROUPS.ID_GROUPS_CATEG = GROUPS_CATEG.ID AND GROUPS_CATEG.APP = "devices")');
+//print_r($vars);
 
-$device = $networkDeviceMapper->find($argv[1]);
-
-if ($device == null) {
-    echo "[warning] Network device in group not found, device id: " . $deviceId . PHP_EOL;
-    exit;
+foreach($vars as $line => $string) {
+    if (strpos($string, "clients_data:") !== FALSE){
+        $clientsPos = $line;
+        $iRemove = $clientsPos + 1;
+        while (strpos($vars[$iRemove], "    -") !== FALSE) {
+            unset($vars[$iRemove]);
+            $iRemove++;
+        }
+        $varsClear = array_values($vars);
+        array_splice($varsClear, $clientsPos + 1, 0, $toAdd );
+    }
 }
 
-$aDevice = $device->toArray();
+//print_r($varsClear);
 
-try {
-    echo var_export($aDevice,true) . PHP_EOL;
-}
-catch (Common_Model_ValidationException $vE) {
-    echo "Error: " . var_export($vE->getMessages(),true) . PHP_EOL;
-}
-catch(Exception $e) {
-    echo "Error: " . $e->getMessage() . PHP_EOL;
-}
+
+echo "--------------------------------\n";
+
+file_put_contents('./tmpFiles/tests.yml', $varsClear);
+
