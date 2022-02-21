@@ -1,0 +1,39 @@
+filebeat.inputs:
+- type: log
+  enabled: true
+  scan_frequency: 1s
+  close_timeout: 30m
+  paths:
+    - /var/log/opennac/opennac-analytics.log
+    - /var/log/opennac/opennac-nd-analytics.log
+    - /var/log/opennac/opennac-macport.log
+    - /var/log/opennac/opennac-netdev-compliance.log
+    - /var/log/opennac/opennac-captive-analytics.log
+  fields:
+    document_type: opennac
+  fields_under_root: true
+  
+- type: log
+  enabled: true
+  scan_frequency: 1s
+  close_timeout: 30m
+  paths:
+    - /var/log/radius/radius.log
+  fields:
+    document_type: radius
+  fields_under_root: true
+
+filebeat.config.modules:
+  path: ${path.config}/modules.d/*.yml
+  reload.enabled: false
+
+logging:
+  level: info
+  to_syslog: false
+
+output.logstash:
+  hosts: ["onaggregator:5000"]
+  #hosts: ["onaggregator:5000","onaggregator2:5000"]
+  #loadbalance: true
+  timeout: 300
+  bulk_max_size: 100

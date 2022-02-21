@@ -16,6 +16,7 @@ filesToCheckCore=("/etc/raddb/eap.conf"
             "/etc/postfix/main.cf"
             "/etc/postfix/generic"
             "/usr/share/opennac/api/application/configs/application.ini"
+            "/etc/filebeat/filebeat.yml"
 )
 
 filesToCheckAnalytics=(
