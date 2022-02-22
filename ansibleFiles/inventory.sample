@@ -1,0 +1,33 @@
+; This is the file where you must declare your server names and IP addresses
+
+; The syntax followed is:
+; <hostname> ansible_ssh_host=<PUBLIC_IP> private_ip_address=<PRIVATE_ip>
+; The hostname chosen will be changed on the server
+; In some cases, public and private IP may be the same
+
+
+[principal]
+principal ansible_ssh_host=10.10.36.198 private_ip_address=192.168.69.5 role_opennac=principal
+
+[analytics]
+analytics01 ansible_ssh_host=10.10.36.136 private_ip_address=192.168.69.10 role_opennac=analytics
+
+[worker]
+worker01 ansible_ssh_host=10.10.36.121 private_ip_address=192.168.69.1 role_opennac=worker
+;worker02 ansible_ssh_host=10.10.36.122 private_ip_address=192.168.69.2 role_opennac=worker
+;worker03 ansible_ssh_host=10.10.36.123 private_ip_address=192.168.69.3 role_opennac=worker
+
+[proxy]
+;proxy01 ansible_ssh_host=10.10.36.103 private_ip_address=192.168.69.7 role_opennac=proxy
+
+[sensor]
+;sensor01 ansible_ssh_host=10.10.36.197 private_ip_address=192.168.69.1 role_opennac=sensor
+
+[cores:children]
+principal
+worker
+proxy
+
+; Please note that the groups "princpal" and "analytics" must always be uncommented
+; If you do not have one of those servers, please fill the IPs with 127.0.0.1
+; Besides, proxy, sensor and workers can be commented (;) if we do not have them 

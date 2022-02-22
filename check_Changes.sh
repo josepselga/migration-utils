@@ -103,7 +103,7 @@ echo -e "\n${YELLOW}Checking installation files...${NC}\n"
 
 for i in "${filesToCheck[@]}"; do
     if scp root@$node:$i $tmpPath/$(basename $i)&> /dev/null; then
-        check_changes "./files/$type/$(basename $i)" "$tmpPath/$(basename $i)"
+        check_changes "./checkFiles/$type/$(basename $i)" "$tmpPath/$(basename $i)"
         rm -rf "$tmpPath/$(basename $i)"
         echo "$tmpPath/$(basename $i)"
     else
