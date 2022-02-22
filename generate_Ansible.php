@@ -109,9 +109,9 @@ function getFiles($target, $targetPassword, $files, $local){
     if($connection){
         #ssh2_auth_password($connection, 'root', 'opennac');
         #$connect = ssh2_connect($target, 22);
-        if(ssh2_auth_password($connection, 'root', $targetPassword)){
-            echo "Password Authentication Successful\n";
-            echo "Retrieving files...\n";
+        if(@ssh2_auth_password($connection, 'root', $targetPassword)){
+            echo "\033[32m Password Authentication Successful \033[0m \n";
+            echo " Retrieving files...\n";
             foreach ($files as $file) {
                 $basename = basename($file);
                 ssh2_scp_recv($connection, $file, "$local/$basename");
@@ -120,12 +120,12 @@ function getFiles($target, $targetPassword, $files, $local){
         }
         else
         {
-            echo "Password Authentication Failed\n";
+            echo "\n\033[01;31m Password Authentication Failed  \033[0m\n\n";
             ssh2_disconnect($connection);
             exit;
         }
     }else{
-        echo "Can't connect to host via SSH: $target\n";
+        echo "\n\033[01;31m Can't connect to host via SSH: $target \033[0m \n";
         exit;
     }
 }
@@ -407,10 +407,10 @@ function generateAnsibleVarsV2($location, $targetType, $ntp, $repoAuth, $clients
             array_splice($varsClear, $clientsPos + 1, 0, $clientsString );
         }
         if (strpos($string, "relayhostName:") !== FALSE && $targetType == "core"){
-            $vars[$line] = "relayhostName: '" . $postfix['Relay Host'] . "'\n";
-            $vars[$line+1] = "relayhostPort: '" . $postfix['Relay Port'] . "'\n";
-            $vars[$line+2] = "mydomain: '" . $postfix['Postfix Domain'] . "'\n";
-            $vars[$line+3] = "emailAddr: '" . $postfix['Postfix Email'] . "'\n";
+            $vars[$line] = "relayhostName: '" . @$postfix['Relay Host'] . "'\n";
+            $vars[$line+1] = "relayhostPort: '" . @$postfix['Relay Port'] . "'\n";
+            $vars[$line+2] = "mydomain: '" . @$postfix['Postfix Domain'] . "'\n";
+            $vars[$line+3] = "emailAddr: '" . @$postfix['Postfix Email'] . "'\n";
 
         }
 
@@ -597,38 +597,38 @@ function generateAnsibleVars($location, $targetType, $ntp, $repoAuth, $clients, 
 //The idea is to parse all the 1.2.1 config and put into vars YAML file used to deploy an OpenNAC infraestructure so the new nodes will mantain the old ones config
 // We can use the IPs defined in /etc/hosts to get the maximum of variables connecting to each node of the infraestructure and get the values (example: proxy config, clients.conf)
 
-$shortopts  = "t:";  // Target (must)
+$shortopts  = "t:"; // Target (must)
 $shortopts .= "p:"; // Target Password
 $shortopts .= "n:"; // Target Type
+$shortopts .= "h:"; // Target Type
 
-$longopts  = array(
-    "type:"    // Target Type
-);
-
-$options = getopt($shortopts, $longopts);
+$options = getopt($shortopts);
 
 //1st we wull read and parse all the information on /etc/hosts
 //getEtcHosts($target);
+if (array_search("-h", $argv)){
+    help();
+}
 
-if (!$options["t"]){
-    echo "No target specified, please select a target \"-t\"\n\n";
+if (!@$options["t"]){
+    echo "\n\033[1;33m No target specified, please select a target \"-t\" \033[0m \n\n";
     exit;
 }else{
     $target = $options["t"];
 }
 
-if (!$options["p"]){
-    echo "No root password specified, using default...\n\n";
+if (!@$options["p"]){
+    echo "\n\033[1;33m No root password specified, using default... \033[0m \n";
     $targetPassword = "opennac";
 }else{
     $targetPassword = $options["p"];
 }
 
-if (!$options["n"]){
-    echo "No node type specified, using default (core)...\n\n";
+if (!@$options["n"]){
+    echo "\n\033[1;33m No node type specified, using default (core)... \033[0m \n";
     $targetType = "core";
 }else{
-    echo "Node type Proxy\n\n";
+    echo "\nNode type Proxy\n";
     $targetType = "proxy";
 }
 
@@ -669,13 +669,15 @@ echo "\n---------------------------------------------------------\n\n";
 $replication = parse_mysqlReplication("./tmpFiles/checkMysql.sh");
 echo "Nagios Pass: \n\n";
 echo "    " . $replication;
-echo "\n\n---------------------------------------------------------\n\n";
+echo "\n\n---------------------------------------------------------\n";
 
 //generateAnsibleVars("./tmpFiles", $targetType, $ntp, $repoAuth, $clients, $postfix, $replication);
 
 generateAnsibleVarsV2("./ansibleFiles", $targetType, $ntp, $repoAuth, $clients, $postfix, $replication);
 
 removeTmpFiles($files, "./tmpFiles");
+
+echo "\n\033[32m Ansible Vars YAML for $targetType Generated/Updated, check on ansibleFiles directory \033[0m \n\n";
 
 /*
 
@@ -724,12 +726,14 @@ function help()
     echo "
 Usage: Generate OpenNAC Ansible YAML [options]
 
-Generates the vars YAML for OpenNAC deployment using Ansible.
+\tGenerates the vars YAML for OpenNAC deployment using Ansible.
 
-Available options:
-    --help          display this help and exit
-    --type          Set the type of the target (Core, Proxy, Analytics, Sensor)
-    --target        Set the target to get variables (IP)
+\tAvailable options:\n
+\t    -h          Display this help and exit
+\t    -t          Set the target to get variables (IP)
+\t    -p          Set the target SSH password
+\t    -n          Set the type of the target (Core, Proxy, Analytics, Sensor)
+
 ";
     exit;
 }

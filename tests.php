@@ -24,8 +24,5 @@ foreach($vars as $line => $string) {
 
 //print_r($varsClear);
 
-
-echo "--------------------------------\n";
-
 file_put_contents('./tmpFiles/tests.yml', $varsClear);
 

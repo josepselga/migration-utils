@@ -7,7 +7,7 @@ YELLOW='\033[0;33m'
 LIGHT_BLUE='\033[0;34m'
 NC='\033[0m'
 
-tmpPath=/tmp
+tmpPath="./tmpFiles"
 SSH_KEY_SCRIPT="$(dirname "$0")/set_up_ssh_keys.sh"
 
 filesToCheckCore=("/etc/raddb/eap.conf"
@@ -66,8 +66,8 @@ post_install_noMove() {
 }
 
 node='NO-TARGET'
-type="core"
 password="opennac"
+type="Core"
 
 while getopts n:t:p: flag
 do
@@ -95,30 +95,31 @@ case $type in
     ;;
 esac
 
+if [[ $type != "Core" ]] && [[ $type != "Analytics" ]]; then
+    echo -e "\n${RED}Wrong Tagret type, specify \"core\" or \"analytics\"${NC}\n"
+    exit
+fi
+
 $SSH_KEY_SCRIPT "$node" "$password"
 
-
-
 echo -e "\n${YELLOW}Checking installation files...${NC}\n"
-
 for i in "${filesToCheck[@]}"; do
     if scp root@$node:$i $tmpPath/$(basename $i)&> /dev/null; then
         check_changes "./checkFiles/$type/$(basename $i)" "$tmpPath/$(basename $i)"
         rm -rf "$tmpPath/$(basename $i)"
-        echo "$tmpPath/$(basename $i)"
+        #echo "$tmpPath/$(basename $i)"
     else
         #echo -e "${RED}Can't retrieve the file $i for host $node${NC}"
         noRetrievedFiles+=("$i")
     fi
 done
 
+if [[ $type == "Core" ]]; then
+    echo -e "\n${YELLOW}Checking opennac .sample files...${NC}\n"
+    echo -e "${RED}The following files appear to be modified based on .sample:${NC}"
 
-
-echo -e "\n${YELLOW}Checking opennac .sample files...${NC}\n"
-echo -e "${RED}The following files appear to be modified based on .sample:${NC}"
-
-ssh root@$node "$(typeset -f post_install_noMove); post_install_noMove" 
-
+    ssh root@$node "$(typeset -f post_install_noMove); post_install_noMove" 
+fi
 
 if (( ${#noRetrievedFiles[@]} )); then
     echo -e "\n${RED}The following files can't be retrieved:${NC}"
