@@ -111,6 +111,16 @@ function getFiles($target, $targetPassword, $files, $local){
         #$connect = ssh2_connect($target, 22);
         if(@ssh2_auth_password($connection, 'root', $targetPassword)){
             echo "\033[32m Password Authentication Successful \033[0m \n";
+
+            $stream = ssh2_exec($connection, "cat /usr/share/opennac/api/.version");
+            stream_set_blocking($stream, true);
+            $stream_out = ssh2_fetch_stream($stream, SSH2_STREAM_STDIO);
+            $version = explode("-", stream_get_contents($stream_out));
+
+            if($version[0] != "1.2.1"){
+                echo "\n\033[01;31m This script is only valid for 1.2.1 Target Verison  \033[0m\n\n";
+                exit;
+            }
             echo " Retrieving files...\n";
             foreach ($files as $file) {
                 $basename = basename($file);
@@ -413,14 +423,14 @@ function generateAnsibleVarsV2($location, $targetType, $ntp, $repoAuth, $clients
             $vars[$line+3] = "emailAddr: '" . @$postfix['Postfix Email'] . "'\n";
 
         }
+        if (strpos($string, "mysql_root_password:") !== FALSE && $targetType == "core"){
+            $vars[$line] = "mysql_root_password: openanac # Password for mysql root";
+        }
+        if (strpos($string, "mysql_replication_password_nagios:") !== FALSE && $targetType == "core"){
+            $vars[$line] = "mysql_replication_password_nagios: '" . $replication ."'";
+        }
+    }
 
-    }
-    if (strpos($string, "mysql_root_password:") !== FALSE && $targetType == "core"){
-        $vars[$line] = "mysql_root_password: opennac # Password for mysql root";
-    }
-    if (strpos($string, "mysql_replication_password_nagios:") !== FALSE && $targetType == "core"){
-        $vars[$line] = "mysql_replication_password_nagios: '" . $replication ."'";
-    }
     //print_r($varsClear);
 
     file_put_contents("$location/vars_core.yml", $varsClear);

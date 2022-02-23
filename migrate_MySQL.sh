@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 #Screen colour constants
@@ -105,8 +104,19 @@ if [ -n "$slave" ]; then
         exit 0
     fi
 
-    echo -e "\n${LIGHT_BLUE}[ON SLAVE 1.2.1]${NC}\n"
+    version=$(ssh root@$slave "cat /usr/share/opennac/api/.version | cut -f1 -d\"-\"" 2>&1)
+    if [[ "$version" != *"1.2.1"* ]]; then
+        echo -e "${RED}Slave node must be in 1.2.1 Verion${NC}\n"
+        exit
+    fi
 
+    version=$(ssh root@$principal "cat /usr/share/opennac/api/.version | cut -f1 -d\"-\"" 2>&1)
+    if [[ "$version" != *"1.2.2"* ]]; then
+        echo -e "${RED}Principal node must be in 1.2.2 Verion${NC}\n"
+        exit
+    fi
+
+    echo -e "\n${LIGHT_BLUE}[ON SLAVE 1.2.1]${NC}\n"
     scp $SSH_KEY_SCRIPT root@$slave:/tmp
     ssh root@$slave "chmod u+x /tmp/$(basename $SSH_KEY_SCRIPT) | /tmp/$(basename $SSH_KEY_SCRIPT) $principal $principalPassword"
     ssh root@$slave "rm -rf /tmp/$(basename $SSH_KEY_SCRIPT)"
