@@ -84,7 +84,7 @@ post_install_noMove() {
 
 node='NO-TARGET'
 password="opennac"
-type="Core"
+type="core"
 
 while getopts n:t:p: flag
 do
@@ -96,7 +96,6 @@ do
 done
 
 ## Comprovar modificaciones de la instalacion 
-
 case $type in
 
   ## If Core:
@@ -119,10 +118,11 @@ if [[ $type != "Core" ]] && [[ $type != "Analytics" ]]; then
     exit
 fi
 
-$($SSH_KEY_SCRIPT "$node" "$password") 
+$SSH_KEY_SCRIPT "$node" "$password" 
 
 echo -e "\n${YELLOW}Checking installation files...${NC}"
 for i in "${filesToCheck[@]}"; do
+    
     if scp root@$node:$i $tmpPath/$(basename $i)&> /dev/null; then
         check_changes "./checkFiles/$type/$(basename $i)" "$tmpPath/$(basename $i)"
         rm -rf "$tmpPath/$(basename $i)"
