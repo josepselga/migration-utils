@@ -17,6 +17,7 @@ filesToCheckCore=("/etc/raddb/eap.conf"
             "/etc/postfix/generic"
             "/usr/share/opennac/api/application/configs/application.ini"
             "/etc/filebeat/filebeat.yml"
+            "/etc/raddb/huntgroups"
 )
 
 filesToCheckAnalytics=(
@@ -75,11 +76,59 @@ post_install_noMove() {
     do
             oldini=$(echo ${sample} | sed 's_.sample__')
             diff=$(diff ${sample} ${oldini} 1>/dev/null; echo $?)
-            if [ "${diff}" -eq 1 ] && [[ "${oldini}" != *"otp/config.ini" ]]
+            if [ "${diff}" -eq 1 ] && [[ "${oldini}" != *"otp/config.ini" ]] 
             then
                     echo -e "\n${oldini}"
             fi
     done
+}
+
+checkHealthcheck(){
+
+    FILES="/usr/share/opennac/healthcheck/healthcheck.ini.*"
+    first=true
+    for f in $FILES
+    do
+    if $first; then
+        actualDiff=$(diff --suppress-common-lines --speed-large-files -y /usr/share/opennac/healthcheck/healthcheck.ini $f | wc -l)
+        nodeType=${f##*.}
+        first=false
+    else
+        checkDiff=$(diff --suppress-common-lines --speed-large-files -y /usr/share/opennac/healthcheck/healthcheck.ini $f | wc -l)
+        if [ $checkDiff -lt $actualDiff ]; then
+        actualDiff=$checkDiff
+        nodeType=${f##*.}
+        fi
+    fi
+    done
+
+    if [ "$actualDiff" -eq "0" ]; then
+        COLOR='\033[0;32m'
+    else
+        COLOR='\033[0;31m'
+    fi
+    echo -e "${COLOR}Your node healthcheck seems to be a " $nodeType " and it have" $actualDiff "differences from the .ini \033[0m"
+}
+
+checkCerts(){
+    ## Locate radius and httpd certs location and check if they are modified
+    # HTTPD
+    locationHTTPD=$(sed -n 's/.*SSLCertificateFile\(.*\)/\1/p'  /etc/httpd/conf.d/opennac_ssl.conf)
+    certHTTPD=$(openssl x509 -in $locationHTTPD -noout -subject)
+    if [[ "$certHTTPD" != "subject= /C=ES/ST=Madrid/L=Madrid/CN=opennac.test" ]]; then
+        echo -e "\033[0;31mThe HTTPD cert seems to be modified, please check. Cert info: \033[0m" $certHTTPD
+    else
+        echo -e "\033[0;32mThe HTTPD cert seems not to be modified \033[0m"
+    fi
+    #Radius
+    locationRADIUS=/etc/raddb/certs/$(sed -n 's/.*certificate_file.*\/\(.*\)/\1/p'  /etc/raddb/eap.conf)
+    certRADIUS=$(openssl x509 -in $locationRADIUS -noout -subject)
+    if [[ "$certRADIUS" != "subject= /C=FR/ST=Radius/O=Example Inc./CN=Example Server Certificate/emailAddress=admin@example.com" ]]; then
+        echo -e "\033[0;31mThe RADIUS cert seems to be modified, please check. Cert info: \033[0m" $certRADIUS
+    else
+        echo -e "\033[0;32mThe RADIUS cert seems not to be modified \033[0m"
+    fi
+
 }
 
 node='NO-TARGET'
@@ -134,13 +183,12 @@ for i in "${filesToCheck[@]}"; do
 done
 
 if [ ${#filesChanged[@]} -eq 0 ]; then
-    echo -e "${GREEN}No files appear to be modified based on OVA.${NC}\n"
+    echo -e "${GREEN}No files appear to be modified based on OVA.${NC}"
 else
     echo -e "${RED}The following files appear to be modified based on OVA:${NC}"
     for z in "${filesChanged[@]}"; do
         echo "$z"
     done
-    echo -e "\n"
 fi
 
 
@@ -150,6 +198,13 @@ if [[ $type == "Core" ]]; then
 
     ssh root@$node "$(typeset -f post_install_noMove); post_install_noMove" 
 fi
+
+
+echo -e "\n${YELLOW}Checking opennac healthcheck files...${NC}"
+ssh root@$node "$(typeset -f checkHealthcheck); checkHealthcheck"
+
+echo -e "\n${YELLOW}Checking HTTPD/Radius certs...${NC}"
+ssh root@$node "$(typeset -f checkCerts); checkCerts"
 
 if (( ${#noRetrievedFiles[@]} )); then
     echo -e "\n${RED}The following files can't be retrieved:${NC}"
