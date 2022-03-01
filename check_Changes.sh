@@ -169,6 +169,12 @@ fi
 
 $SSH_KEY_SCRIPT "$node" "$password" 
 
+version=$(ssh root@$node "cat /usr/share/opennac/api/.version | cut -f1 -d\"-\"" 2>&1)
+if [[ "$version" != *"1.2.1"* ]]; then
+    echo -e "${RED}Slave node must be in 1.2.1 Verion${NC}\n"
+    exit
+fi
+
 echo -e "\n${YELLOW}Checking installation files...${NC}"
 for i in "${filesToCheck[@]}"; do
     
