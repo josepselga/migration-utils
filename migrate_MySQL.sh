@@ -26,6 +26,7 @@ helpMenu(){
 
     ${GREEN}OPTIONS:${NC}
         --principalPass = SSH password for root user on Principal (1.2.2) node (default = opennac)
+        --dbRootPass = Root Password for MySQL of Slave node.
         --slavePass = SSH password for root user on Slave (1.2.1) node (default = opennac)
         -h [help] --help = shows this menu\n\n"
 }
@@ -42,6 +43,7 @@ while [ -n "$1" ]; do
     -h | --help) help_menu=true; shift ;;
     --principalPass) principalPassword=$2; shift 2;;
     --slavePass) slavePassword=$2; shift 2;;
+    --dbRootPass) dbRootPass=$2; shift 2;;
     --mysqlpass) mysqlpass=$2; shift 2;;
     --healthpass) healthpass=$2; shift 2;;
     --) shift; break ;;
@@ -79,6 +81,10 @@ fi
 if [ -n "$slave" ] && [ -z "$slavePassword" ]; then
     echo -e "${YELLOW}Missing --slavePass (Slave Pasword), using default \"opennac\"${NC}"
     slavePassword='opennac'
+fi
+if [ -z "$dbRootPass" ]; then
+    echo -e "${YELLOW}Missing --dbRootPass (Slave mysql Root Pasword), using default \"opennac\"${NC}"
+    dbRootPass='opennac'
 fi
 if [ -n "$file" ] && [ -f "$file" ]; then
     echo "$file exists."
@@ -123,7 +129,12 @@ if [ -n "$slave" ]; then
 
     # Dump database
     echo -e "${YELLOW}  Dumping DB on slave node${NC}\n"
-    ssh root@$slave "mysqldump -u root -popennac opennac > $ddbbPath/$ddbbName"
+    ssh root@$slave "mysqldump -u root -p$dbRootPass opennac > $ddbbPath/$ddbbName"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}\nERROR Dumping DB on slave node${NC}\n"
+        exit
+    fi
+
 
     # Send database to principal
     echo -e "${YELLOW}  Sendind DB from slave (1.2.1) to principal (1.2.2)${NC}\n"
@@ -202,6 +213,15 @@ if [ -n "$slave" ]; then
     ssh root@$principal "cp $ddbbPath/checkMysql.sh.old /usr/share/opennac/healthcheck/libexec/checkMysql.sh"
 elif [ -n "$file" ]; then
    ssh root@$principal "sed -i \"s/-p.*'.*'/-p '$healthpass'/g\" /usr/share/opennac/healthcheck/libexec/checkMysql.sh"
+fi
+
+# Canviar password radius SQL module
+echo -e "${YELLOW}  Changing radius SQL module password${NC}\n"
+if [ -n "$slave" ]; then
+    ssh root@$principal "passwordWDB=\$(sed -n 's/resources.multidb.dbW.password = \(.*\)/\1/p' $ddbbPath/application.ini.old) && sed -i \"s/password = .*/password = \$passwordWDB/\" /etc/raddb/mods-enabled/sql_opennac"
+elif [ -n "$file" ]; then
+    passwordWDB="\\\"$mysqlpass\\\""
+    ssh root@$principal "sed -i \"s/password = .*/password = $passwordWDB/\" /etc/raddb/mods-enabled/sql_opennac"
 fi
 
 # Import the 1.2.1 DDBB
