@@ -84,7 +84,7 @@ checkProcess(){
     done
     
     
-    if [ ${#errors[@]} -eq 0 ]; then
+    if [ ${#Array3[@]} -gt 0 ]; then
         echo -e "${RED}Non Standard Processes running: ${NC}"
         echo $Array3
     else
