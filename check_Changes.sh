@@ -68,7 +68,7 @@ checkPackages(){
 }
 
 checkProcess(){
-    processCheck=(WARNING. This system is for the use of authorized users only. Be careful !! COMMAND healthcheck.php abrt-dump-oops abrtd acpid aio async ata_aux ata_sff atd auditd bash bdi-default cgroup checkUserDataSo collectd console-kit-dae crond crypto cut dbus-daemon deferwq dhclient dhcp-helper-rea events events_long events_power_ef ext4-dio-unwrit filebeat filebeat-god flush-253 gearmand hald hald-addon-acpi hald-addon-inpu hald-runner healthcheck.php httpd init irqbalance jbd2 kacpi_hotplug kacpi_notify kacpid kauditd kblockd kdmflush kdmremove khelper khubd khugepaged khungtaskd kintegrityd kpsmoused kseriod ksmd ksoftirqd kstriped ksuspend_usbd kswapd0 kthreadd kthrotld linkwatch login lru-add-drain master md md_misc memcached migration mingetty mysqld mysqld_safe named netns ntpd php pickup pm portreserve ps qmgr radiusd redis-collectd. redis-server redisserver-col rsyslogd scsi_eh_0 scsi_eh_1 scsi_eh_2 sh slapd sleep snmpd snmptrapd sort sshd stopper sync_supers tr udevd uniq usbhid_resumer vballoon virtio-net watchdog)
+    processCheck=(WARNING. This system is for the use of authorized users only. Be careful !! COMMAND healthcheck.php abrt-dump-oops abrtd check_ad_domain acpid aio async ata_aux ata_sff atd auditd bash bdi-default cgroup checkUserDataSo collectd console-kit-dae crond crypto cut dbus-daemon deferwq dhclient dhcp-helper-rea events events_long events_power_ef ext4-dio-unwrit filebeat filebeat-god flush-253 gearmand hald hald-addon-acpi hald-addon-inpu hald-runner healthcheck.php httpd init irqbalance jbd2 kacpi_hotplug kacpi_notify kacpid kauditd kblockd kdmflush kdmremove khelper khubd khugepaged khungtaskd kintegrityd kpsmoused kseriod ksmd ksoftirqd kstriped ksuspend_usbd kswapd0 kthreadd kthrotld linkwatch login lru-add-drain master md md_misc memcached migration mingetty mysqld mysqld_safe named netns ntpd php pickup pm portreserve ps qmgr radiusd redis-collectd. redis-server redisserver-col rsyslogd scsi_eh_0 scsi_eh_1 scsi_eh_2 sh slapd sleep snmpd snmptrapd sort sshd stopper sync_supers tr udevd uniq usbhid_resumer vballoon virtio-net watchdog)
     
     echo -e "\n${YELLOW}Checking Running Porocesses...${NC}"    
     processRunning=$(ssh root@$1 "ps -eo comm | sort | cut -d'/' -f 1 | cut -d':' -f 1 | uniq | tr '\n' ' '" 2>&1)
@@ -98,10 +98,12 @@ post_install_noMove() {
     for sample in $(find /usr/share/opennac/ -name *.ini.sample)
     do
             oldini=$(echo ${sample} | sed 's_.sample__')
-            diff=$(diff ${sample} ${oldini} 1>/dev/null; echo $?)
-            if [ "${diff}" -eq 1 ] && [[ "${oldini}" != *"otp/config.ini" ]] 
-            then
-                    echo -e "\n${oldini}"
+            if [ -f ${oldini} ]; then
+                diff=$(diff ${sample} ${oldini} 1>/dev/null; echo $?)
+                if [ "${diff}" -eq 1 ] && [[ "${oldini}" != *"otp/config.ini" ]] 
+                then
+                        echo -e "${oldini}"
+                fi
             fi
     done
 }
