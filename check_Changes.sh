@@ -244,8 +244,9 @@ if (( ${#noRetrievedFiles[@]} )); then
     done
 fi
 
-checkPackages $node
-
-checkProcess $node
+if [[ $type == "Core" ]]; then
+    checkPackages $node
+    checkProcess $node
+fi
 
 echo -e '\n'
