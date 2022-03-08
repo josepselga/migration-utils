@@ -85,4 +85,5 @@ This script will move the data from the Analytics 1.2.1 node to the 1.2.2 node. 
 To run the script:
 
 ```
+ migrate_Elastic.sh -o [Old ANALYTICS IP] -n [New ANALYTICS IP] -p [(OPTIONAL) Password for Old Analytics]
 ```
